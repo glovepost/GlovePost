@@ -556,7 +556,7 @@ def fetch_post_detail(post: Dict[str, Any]) -> Dict[str, Any]:
 
 def fetch_posts_from_subreddit(subreddit: str, limit: int = 50) -> List[Dict[str, Any]]:
     """
-    Fetch posts from a specific subreddit.
+    Fetch posts from a specific subreddit using parallel processing for post details.
     
     Args:
         subreddit: The subreddit name (e.g., "news", "technology")
@@ -565,6 +565,9 @@ def fetch_posts_from_subreddit(subreddit: str, limit: int = 50) -> List[Dict[str
     Returns:
         List of post dictionaries with content information
     """
+    from concurrent.futures import ThreadPoolExecutor
+    import threading
+    
     logger.info(f"Fetching up to {limit} posts from r/{subreddit}")
     
     subreddit_url = BASE_URL.format(subreddit=subreddit)
@@ -580,28 +583,60 @@ def fetch_posts_from_subreddit(subreddit: str, limit: int = 50) -> List[Dict[str
     # Limit the number of posts to process
     posts = posts[:min(limit, len(posts))]
     
-    # Fetch detailed information for self posts
-    detailed_posts = []
-    for post in posts:
-        try:
-            if post.get('need_detail', False):
+    # Identify which posts need details
+    posts_needing_details = [post for post in posts if post.get('need_detail', False)]
+    posts_without_details = [post for post in posts if not post.get('need_detail', False)]
+    
+    logger.info(f"Found {len(posts_needing_details)} posts needing details from r/{subreddit}")
+    
+    # Function to process a single post with retry logic
+    def process_post_detail(post):
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
                 detailed_post = fetch_post_detail(post)
-                detailed_posts.append(detailed_post)
+                return detailed_post
+            except Exception as e:
+                logger.error(f"Error processing post {post.get('post_id', 'unknown')} (attempt {attempt+1}/{max_retries}): {str(e)}")
+                if attempt < max_retries - 1:
+                    # Exponential backoff with jitter
+                    sleep_time = (2 ** attempt) + random.uniform(1, 3)
+                    time.sleep(sleep_time)
+                else:
+                    # Return the original post if all retries fail
+                    post.pop('need_detail', None)
+                    return post
+    
+    detailed_posts = posts_without_details.copy()  # Start with posts that don't need details
+    
+    # Use threading to fetch post details in parallel
+    if posts_needing_details:
+        # Use a limited thread pool to avoid rate limiting (max 3 concurrent requests)
+        max_workers = min(3, len(posts_needing_details))
+        logger.info(f"Fetching details for {len(posts_needing_details)} posts using {max_workers} workers")
+        
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all tasks
+            future_to_post = {executor.submit(process_post_detail, post): post for post in posts_needing_details}
+            
+            # Process results as they complete
+            for future in future_to_post:
+                try:
+                    detailed_post = future.result()
+                    if detailed_post:
+                        detailed_posts.append(detailed_post)
+                except Exception as e:
+                    logger.error(f"Unhandled exception in post detail thread: {str(e)}")
                 
-                # Add delay between requests
-                time.sleep(random.uniform(3.0, 6.0))
-            else:
-                detailed_posts.append(post)
-                
-        except Exception as e:
-            logger.error(f"Error processing post {post.get('post_id', 'unknown')}: {str(e)}")
+                # Add a short delay between submissions to avoid hammering the server
+                time.sleep(random.uniform(0.5, 1.5))
     
     logger.info(f"Successfully fetched {len(detailed_posts)} posts from r/{subreddit}")
     return detailed_posts
 
 def fetch_reddit_content(subreddits: List[str] = None, limit_per_subreddit: int = 50) -> List[Dict[str, Any]]:
     """
-    Main function to fetch content from multiple subreddits.
+    Main function to fetch content from multiple subreddits in parallel.
     
     Args:
         subreddits: List of subreddit names to scrape
@@ -610,21 +645,46 @@ def fetch_reddit_content(subreddits: List[str] = None, limit_per_subreddit: int 
     Returns:
         List of standardized content items for GlovePost
     """
+    from concurrent.futures import ThreadPoolExecutor
+    import threading
+    
     if subreddits is None:
         subreddits = DEFAULT_SUBREDDITS
     
-    all_content = []
+    logger.info(f"Starting parallel fetching from {len(subreddits)} subreddits")
     
-    for subreddit in subreddits:
+    all_content = []
+    content_lock = threading.Lock()
+    
+    # Process a single subreddit with error handling
+    def process_subreddit(subreddit):
         try:
-            subreddit_content = fetch_posts_from_subreddit(subreddit, limit_per_subreddit)
-            all_content.extend(subreddit_content)
+            logger.info(f"Starting thread for r/{subreddit}")
+            start_time = time.time()
             
-            # Add significant delay between subreddits to avoid rate limiting
-            time.sleep(random.uniform(10.0, 15.0))
+            # Fetch content from this subreddit
+            subreddit_content = fetch_posts_from_subreddit(subreddit, limit_per_subreddit)
+            
+            # Thread-safe append to all_content
+            with content_lock:
+                all_content.extend(subreddit_content)
+                
+            duration = time.time() - start_time
+            logger.info(f"Thread for r/{subreddit} completed in {duration:.2f} seconds with {len(subreddit_content)} posts")
             
         except Exception as e:
             logger.error(f"Error processing subreddit r/{subreddit}: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+    
+    # Use ThreadPoolExecutor to process subreddits in parallel
+    # Limit to 2 subreddits at a time to avoid rate limiting
+    max_workers = min(2, len(subreddits))
+    logger.info(f"Processing {len(subreddits)} subreddits with {max_workers} worker threads")
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all subreddits for processing
+        executor.map(process_subreddit, subreddits)
     
     # Clean up the data structure to match GlovePost format
     standardized_content = []
@@ -637,6 +697,7 @@ def fetch_reddit_content(subreddits: List[str] = None, limit_per_subreddit: int 
             cleaned_item = {k: v for k, v in item.items() if k in required_fields or k in ['upvotes', 'downvotes', 'author']}
             standardized_content.append(cleaned_item)
     
+    logger.info(f"Complete parallel fetching: collected {len(standardized_content)} standardized content items")
     return standardized_content
 
 def save_to_json(content: List[Dict[str, Any]], filename: str = "reddit_content.json") -> None:

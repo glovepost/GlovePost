@@ -49,9 +49,9 @@
   - [ ] Enhance `categorize_content` with NLP
     - [ ] Replace keyword matching with NLP models (e.g., spaCy, NLTK) for context-aware categorization
     - [ ] Train on sample data from all sources
-  - [ ] Parallelize content fetching in `store_content`
-    - [ ] Use `concurrent.futures` or `asyncio` for simultaneous source fetching
-    - [ ] Implement rate limiting to avoid server overload
+  - [x] Parallelize content fetching in `store_content`
+    - [x] Use `concurrent.futures` or `asyncio` for simultaneous source fetching
+    - [x] Implement rate limiting to avoid server overload
   - [ ] Validate and normalize content in `clean_content`
     - [ ] Add URL validation (e.g., `urlparse`), timestamp consistency, and required field checks
     - [ ] Normalize text (e.g., remove extra whitespace, standardize encoding)
@@ -73,9 +73,9 @@
   - [ ] Use dynamic categorization in `get_category_from_board`
     - [ ] Analyze thread content with NLP instead of static `CATEGORIES_MAPPING`
     - [ ] Combine board and content analysis for hybrid categorization
-  - [ ] Parallelize thread detail fetching in `fetch_threads_from_board`
-    - [ ] Use `concurrent.futures` to fetch thread details concurrently
-    - [ ] Maintain randomized delays to avoid detection
+  - [x] Parallelize thread detail fetching in `fetch_threads_from_board`
+    - [x] Use `concurrent.futures` to fetch thread details concurrently
+    - [x] Maintain randomized delays to avoid detection
   - [ ] Validate content quality in `fetch_4chan_content`
     - [ ] Ensure `content_summary` meets minimum length post-cleaning (e.g., 50 chars)
     - [ ] Flag low-quality items for review
@@ -92,9 +92,9 @@
   - [ ] Use dynamic categorization in `get_category_from_subreddit`
     - [ ] Analyze post content with NLP instead of static `CATEGORIES_MAPPING`
     - [ ] Combine subreddit and content for hybrid categorization
-  - [ ] Parallelize post detail fetching in `fetch_posts_from_subreddit`
-    - [ ] Use `concurrent.futures` for concurrent detail fetching
-    - [ ] Maintain randomized delays to avoid detection
+  - [x] Parallelize post detail fetching in `fetch_posts_from_subreddit`
+    - [x] Use `concurrent.futures` for concurrent detail fetching
+    - [x] Maintain randomized delays to avoid detection
   - [ ] Enhance score parsing in `parse_reddit_posts`
     - [ ] Handle edge cases (e.g., "Vote", thousands separators) for accurate upvotes
     - [ ] Estimate downvotes based on upvote trends if possible
@@ -229,7 +229,6 @@
   - [x] Add user feedback mechanism for recommendations
     - [x] Add "Like/Dislike" (thumbs up/down) buttons to `ContentCard`
     - [x] Send feedback to interaction endpoint
-- **Completed:**
   - [x] Add dark mode theme
     - [x] Implement theme toggle in `App.js`
     - [x] Define dark mode styles in `index.css`
@@ -325,6 +324,19 @@
   - [ ] Ensure scalability for model training
     - [ ] Set up batch training (e.g., daily) on AWS SageMaker
     - [ ] Cache model outputs for quick retrieval
+- **Completed Tasks (Continuous Scraping Improvements):**
+- [x] Replace `refresh_content.sh` with multithreaded `refresh_content.py`
+- [x] Implement task queue using `queue.Queue` for scraper jobs
+- [x] Use `ThreadPoolExecutor` for parallel execution
+- [x] Add continuous operation logic
+- [x] Run as daemon with configurable interval (e.g., 15 min)
+- [x] Support command-line args for workers and interval
+- [x] Enhance robustness in `refresh_content.py`
+- [x] Implement retries with exponential backoff for scraper failures
+- [x] Centralize logging to `refresh_content.log`
+- [x] Optimize resource usage
+- [x] Add rate limiting between tasks (e.g., `time.sleep`)
+- [x] Test with varying worker counts (e.g., 2, 4, 8)
 
 ## Next Steps Priority
 1. ✅ **Implement User Authentication (OAuth 2.0)** (COMPLETED)
@@ -346,6 +358,11 @@
 5. **Implement Machine Learning Model for Recommendations**
    - Transition to LightGBM-based system inspired by Twitter’s algorithm
    - Define features, train model, and integrate for personalized recommendations
+6. ✅ **Replace refresh_content.sh with Multithreaded refresh_content.py** (COMPLETED)
+   - Created Python-based daemon with parallel processing
+   - Implemented thread pools for improved efficiency
+   - Added systemd service for automated startup and monitoring
+   - Enhanced individual scrapers with parallel processing
 
 ## Additional Notes
 - **Research Integration:** Enhanced recommendation engine with Twitter’s ML approach (LightGBM, two-stage process), adding scalability and transparency tasks.

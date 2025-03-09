@@ -1,0 +1,23 @@
+[Unit]
+Description=GlovePost Content Scraper Service
+After=network.target mongodb.service
+
+[Service]
+Type=simple
+User=mythos
+WorkingDirectory=/home/mythos/glovepostsite/GlovePost/scripts
+ExecStart=/usr/bin/python3 /home/mythos/glovepostsite/GlovePost/scripts/refresh_content.py --daemon --workers=4 --interval=3600
+Restart=on-failure
+RestartSec=30
+StandardOutput=journal
+StandardError=journal
+Environment=PYTHONUNBUFFERED=1
+
+# Security measures
+NoNewPrivileges=true
+ProtectSystem=full
+PrivateTmp=true
+ProtectHome=read-only
+
+[Install]
+WantedBy=multi-user.target

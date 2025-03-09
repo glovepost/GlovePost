@@ -201,9 +201,48 @@ def generate_mock_4chan_posts(limit: int = 30) -> List[Dict[str, Any]]:
         })
     return mock_posts
 
-def fetch_reddit_posts(limit: int = 50) -> List[Dict[str, Any]]:
+def fetch_reddit_posts(limit: int = 50, max_retries: int = 3) -> List[Dict[str, Any]]:
+    """Fetch reddit posts with retries."""
     logger.info("Fetching Reddit posts")
-    return []
+    if not REDDIT_SCRAPER_AVAILABLE:
+        logger.warning("Reddit scraper not found, using mock data")
+        return []  # TODO: Replace with generate_mock_reddit_posts(limit)
+    
+    scraper_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'reddit_scraper.py')
+    subreddits = args.__dict__.get('reddit_subreddits', 'news,technology,worldnews,science')
+    scraper_limit = min(limit, 50)
+    
+    for attempt in range(max_retries):
+        try:
+            cmd = [sys.executable, scraper_path, '--subreddits', subreddits, '--limit', str(scraper_limit)]
+            logger.info(f"Attempt {attempt + 1}/{max_retries}: Running command: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            content = json.loads(result.stdout)
+            logger.info(f"Fetched {len(content)} posts from Reddit")
+            return [{
+                'title': item.get('title', 'Untitled Reddit Post'),
+                'summary': item.get('content_summary', ''),
+                'source': item.get('source', 'Reddit'),
+                'link': item.get('url', '#'),
+                'published': item.get('timestamp', datetime.datetime.now().isoformat()),
+                'author': item.get('author', 'u/anonymous'),
+                'category': item.get('category', 'Misc')
+            } for item in content]
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Attempt {attempt + 1} failed with exit code {e.returncode}")
+            logger.error(f"STDERR: {e.stderr}")
+            logger.error(f"STDOUT: {e.stdout}")
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)  # Exponential backoff
+            else:
+                logger.warning("Max retries reached. Returning empty list.")
+                return []
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse output: {e}. Raw: {result.stdout}")
+            return []
+        except Exception as e:
+            logger.error(f"Unexpected error: {str(e)}")
+            return []
 
 # Clean content (unchanged)
 def clean_content(item):
@@ -225,9 +264,12 @@ def clean_content(item):
     }
     return content_object
 
-# Store content (unchanged except for sources dict)
+# Store content (updated with parallel execution)
 def store_content(dry_run=False):
-    """Store content with batch writes."""
+    """Store content with batch writes and parallel fetching."""
+    from concurrent.futures import ThreadPoolExecutor
+    import threading
+    
     sources = {
         'x': fetch_x_posts if ('x' in args.sources and REQUESTS_AVAILABLE) else None,
         'rss': fetch_rss_feeds if ('rss' in args.sources and FEEDPARSER_AVAILABLE) else None,
@@ -236,11 +278,17 @@ def store_content(dry_run=False):
         'reddit': fetch_reddit_posts if ('reddit' in args.sources and (REQUESTS_AVAILABLE or REDDIT_SCRAPER_AVAILABLE)) else None
     }
     
+    # Filter out None values
+    active_sources = {k: v for k, v in sources.items() if v is not None}
+    
     total_items = 0
     stored_items = 0
     all_content = []
+    # Use a lock for thread-safe operations on shared resources
+    content_lock = threading.Lock()
+    items_lock = threading.Lock()
     
-    if not any(sources.values()):
+    if not active_sources:
         logger.warning("No sources configured. Using mock data.")
         all_content = [
             {
@@ -257,18 +305,53 @@ def store_content(dry_run=False):
         ]
         total_items = 10
     else:
-        for source_name, fetch_func in sources.items():
-            if fetch_func:
+        # Define a worker function to fetch and process content from a single source
+        def fetch_and_process_source(source_name, fetch_func):
+            nonlocal total_items
+            source_start_time = time.time()
+            try:
+                logger.info(f"Fetching from {source_name}...")
+                source_content = fetch_func(args.limit)
+                source_items = []
+                
+                # Clean items locally first for better performance
+                for item in source_content:
+                    cleaned = clean_content(item)
+                    if cleaned:
+                        source_items.append(cleaned)
+                
+                # Update shared resources with a lock
+                with items_lock:
+                    total_items += len(source_content)
+                
+                with content_lock:
+                    all_content.extend(source_items)
+                    
+                duration = time.time() - source_start_time
+                logger.info(f"Completed {source_name} fetch in {duration:.2f} seconds: {len(source_items)} valid items from {len(source_content)} total")
+                
+            except Exception as e:
+                logger.error(f"Error processing {source_name}: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+        
+        # Use ThreadPoolExecutor to run fetching in parallel
+        with ThreadPoolExecutor(max_workers=min(len(active_sources), 5)) as executor:
+            # Start one thread per source
+            futures = {}
+            for source_name, fetch_func in active_sources.items():
+                future = executor.submit(fetch_and_process_source, source_name, fetch_func)
+                futures[future] = source_name
+            
+            # Wait for all to complete (or fail)
+            for future in futures:
                 try:
-                    logger.info(f"Fetching from {source_name}...")
-                    source_content = fetch_func(args.limit)
-                    for item in source_content:
-                        total_items += 1
-                        cleaned = clean_content(item)
-                        if cleaned:
-                            all_content.append(cleaned)
+                    future.result()  # This will re-raise any exceptions from the thread
                 except Exception as e:
-                    logger.error(f"Error processing {source_name}: {e}")
+                    source_name = futures[future]
+                    logger.error(f"Unhandled exception in {source_name} thread: {e}")
+                    
+        logger.info(f"All source fetching complete. Total items: {total_items}, valid items: {len(all_content)}")
     
     if MONGODB_AVAILABLE and not (dry_run or args.dryrun):
         operations = [

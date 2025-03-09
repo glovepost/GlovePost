@@ -216,17 +216,57 @@ def fetch_threads_from_board(board: str, limit: int = 30) -> List[Dict[str, Any]
     return detailed_threads
 
 def fetch_4chan_content(boards: List[str] = None, limit_per_board: int = 30) -> List[Dict[str, Any]]:
-    """Main fetch function."""
+    """Main fetch function using parallel processing for boards."""
+    from concurrent.futures import ThreadPoolExecutor
+    import threading
+    
     boards = validate_boards(boards or DEFAULT_BOARDS)
+    logger.info(f"Starting parallel fetching from {len(boards)} boards")
+    
     all_content = []
-    for board in boards:
+    content_lock = threading.Lock()
+    
+    # Process a single board with error handling
+    def process_board(board):
         try:
+            logger.info(f"Starting thread for board /{board}/")
+            start_time = time.time()
+            
+            # Fetch content from this board
             board_content = fetch_threads_from_board(board, limit_per_board)
-            all_content.extend(board_content)
-            time.sleep(random.uniform(2.0, 5.0))
+            
+            # Thread-safe append to all_content
+            with content_lock:
+                all_content.extend(board_content)
+                
+            duration = time.time() - start_time
+            logger.info(f"Thread for /{board}/ completed in {duration:.2f} seconds with {len(board_content)} threads")
+        
         except Exception as e:
             logger.error(f"Error processing board /{board}/: {str(e)}")
-    return [item for item in all_content if all(key in item for key in ['title', 'content_summary', 'url', 'timestamp', 'category'])]
+            import traceback
+            logger.error(traceback.format_exc())
+    
+    # Use ThreadPoolExecutor to process boards in parallel
+    # Limit to 2 concurrent boards to avoid rate limiting
+    max_workers = min(2, len(boards))
+    logger.info(f"Processing {len(boards)} boards with {max_workers} worker threads")
+    
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all boards for processing with random delays
+        futures = []
+        for board in boards:
+            # Add a small random delay before submitting each board to avoid simultaneous requests
+            time.sleep(random.uniform(0.5, 1.5))
+            futures.append(executor.submit(process_board, board))
+        
+        # Wait for all tasks to complete
+        for future in futures:
+            future.result()  # This will re-raise any exceptions
+    
+    valid_content = [item for item in all_content if all(key in item for key in ['title', 'content_summary', 'url', 'timestamp', 'category'])]
+    logger.info(f"Complete parallel fetching: collected {len(valid_content)} valid items from {len(all_content)} total")
+    return valid_content
 
 def save_to_json(content: List[Dict[str, Any]], filename: str = "4chan_content.json") -> None:
     """Save to JSON."""
