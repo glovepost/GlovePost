@@ -1,0 +1,174 @@
+.content-card {
+  border: 1px solid #ecf0f1;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  background-color: #fff;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+
+.content-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.content-category {
+  display: inline-block;
+  background-color: #3498db;
+  color: white;
+  font-size: 0.7rem;
+  font-weight: bold;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 10px;
+  margin-bottom: 10px;
+}
+
+.content-title {
+  font-size: 1.2rem;
+  font-weight: bold;
+  color: #2c3e50;
+  margin: 0 0 10px 0;
+  line-height: 1.4;
+}
+
+.content-meta {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 15px;
+  font-size: 0.8rem;
+  color: #7f8c8d;
+}
+
+.content-source {
+  font-weight: bold;
+}
+
+.content-date {
+  color: #95a5a6;
+}
+
+.content-summary {
+  color: #34495e;
+  margin-bottom: 15px;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  /* Display at most 4 lines of text */
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.content-reason {
+  font-size: 0.8rem;
+  color: #7f8c8d;
+  font-style: italic;
+  background-color: #f8f9fa;
+  padding: 8px 12px;
+  border-radius: 4px;
+  margin-bottom: 15px;
+}
+
+.content-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 15px;
+}
+
+.read-more-link {
+  color: #3498db;
+  text-decoration: none;
+  font-weight: bold;
+  font-size: 0.9rem;
+  transition: color 0.2s;
+}
+
+.read-more-link:hover {
+  color: #2980b9;
+  text-decoration: underline;
+}
+
+.content-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.action-button {
+  background-color: transparent;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-size: 0.8rem;
+  color: #7f8c8d;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.action-button:hover {
+  background-color: #f5f5f5;
+  color: #34495e;
+}
+
+/* Category-specific styling */
+.content-card .content-category:nth-of-type(1) {
+  background-color: #3498db; /* Default/General - Blue */
+}
+
+.content-card[data-category="Tech"] .content-category,
+.content-card .content-category:contains("Tech") {
+  background-color: #1abc9c; /* Tech - Turquoise */
+}
+
+.content-card[data-category="Business"] .content-category,
+.content-card .content-category:contains("Business") {
+  background-color: #9b59b6; /* Business - Purple */
+}
+
+.content-card[data-category="Sports"] .content-category,
+.content-card .content-category:contains("Sports") {
+  background-color: #e74c3c; /* Sports - Red */
+}
+
+.content-card[data-category="Entertainment"] .content-category,
+.content-card .content-category:contains("Entertainment") {
+  background-color: #f39c12; /* Entertainment - Orange */
+}
+
+.content-card[data-category="Health"] .content-category,
+.content-card .content-category:contains("Health") {
+  background-color: #2ecc71; /* Health - Green */
+}
+
+.content-card[data-category="Politics"] .content-category,
+.content-card .content-category:contains("Politics") {
+  background-color: #e67e22; /* Politics - Dark Orange */
+}
+
+/* Responsive styling */
+@media screen and (max-width: 768px) {
+  .content-card {
+    padding: 15px;
+  }
+  
+  .content-title {
+    font-size: 1.1rem;
+  }
+  
+  .content-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  
+  .content-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
