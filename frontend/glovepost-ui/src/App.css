@@ -6,9 +6,10 @@
 
 body {
   font-family: Arial, sans-serif;
-  background-color: #f5f7fa;
-  color: #34495e;
+  background-color: var(--color-bg-primary);
+  color: var(--color-text-primary);
   line-height: 1.6;
+  transition: var(--transition-theme);
 }
 
 .App {
@@ -19,25 +20,35 @@ body {
 
 /* Navigation */
 .navbar {
-  background-color: #2c3e50;
-  color: white;
+  background-color: var(--color-navbar);
+  color: var(--color-navbar-text);
   padding: 0 2rem;
   display: flex;
   justify-content: space-between;
   align-items: center;
   height: 70px;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 5px var(--color-card-shadow);
+  transition: var(--transition-theme);
 }
 
 .logo {
   font-size: 1.8rem;
   font-weight: bold;
-  color: #3498db;
+  color: var(--color-accent-primary);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.logo-icon {
+  width: 32px;
+  height: 32px;
 }
 
 .nav-links {
   display: flex;
   list-style: none;
+  align-items: center;
 }
 
 .nav-links li {
@@ -50,14 +61,39 @@ body {
 }
 
 .nav-links a {
-  color: white;
+  color: var(--color-navbar-text);
   text-decoration: none;
   font-weight: bold;
   transition: color 0.3s ease;
 }
 
 .nav-links a:hover {
-  color: #3498db;
+  color: var(--color-accent-primary);
+}
+
+/* Theme Toggle Button */
+.theme-toggle {
+  background: none;
+  border: none;
+  color: var(--color-navbar-text);
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px;
+  border-radius: 50%;
+  transition: background-color 0.3s ease;
+}
+
+.theme-toggle:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.theme-toggle svg {
+  width: 20px;
+  height: 20px;
+  fill: var(--color-navbar-text);
 }
 
 /* Main Content */
@@ -67,6 +103,7 @@ body {
   max-width: 1200px;
   margin: 0 auto;
   width: 100%;
+  transition: var(--transition-theme);
 }
 
 /* Loading */
@@ -76,16 +113,17 @@ body {
   align-items: center;
   height: 300px;
   font-size: 1.2rem;
-  color: #666;
+  color: var(--color-text-secondary);
 }
 
 /* Footer */
 .footer {
-  background-color: #2c3e50;
-  color: white;
+  background-color: var(--color-navbar);
+  color: var(--color-navbar-text);
   text-align: center;
   padding: 20px;
   margin-top: auto;
+  transition: var(--transition-theme);
 }
 
 .footer p {

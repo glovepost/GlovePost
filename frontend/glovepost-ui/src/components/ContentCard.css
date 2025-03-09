@@ -1,10 +1,10 @@
 .content-card {
-  border: 1px solid #ecf0f1;
+  border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 20px;
   margin-bottom: 20px;
-  background-color: #fff;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+  background-color: var(--color-bg-secondary);
+  box-shadow: 0 2px 5px var(--color-card-shadow);
   transition: transform 0.3s ease, box-shadow 0.3s ease;
   cursor: pointer;
   position: relative;
@@ -13,12 +13,50 @@
 
 .content-card:hover {
   transform: translateY(-3px);
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 5px 15px var(--color-card-shadow-hover);
+}
+
+/* Add a subtle indicator that the card is clickable */
+.content-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, transparent 0%, transparent 97%, var(--color-accent-primary) 100%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.content-card:hover::after {
+  opacity: 0.4;
+}
+
+/* Glove visual element */
+.content-card .glove-icon {
+  position: absolute;
+  top: -15px;
+  right: -15px;
+  width: 70px;
+  height: 70px;
+  background-color: var(--icon-color);
+  opacity: 0.1;
+  transform: rotate(30deg);
+  pointer-events: none;
+  transition: opacity 0.3s ease, transform 0.5s ease;
+  border-radius: 50% 50% 5px 5px;
+}
+
+.content-card:hover .glove-icon {
+  opacity: 0.15;
+  transform: rotate(45deg);
 }
 
 .content-category {
   display: inline-block;
-  background-color: #3498db;
+  background-color: var(--color-accent-primary);
   color: white;
   font-size: 0.7rem;
   font-weight: bold;
@@ -26,14 +64,20 @@
   padding: 3px 8px;
   border-radius: 10px;
   margin-bottom: 10px;
+  position: relative;
+  z-index: 2;
 }
+
+/* Removed post-tag styles */
 
 .content-title {
   font-size: 1.2rem;
   font-weight: bold;
-  color: #2c3e50;
+  color: var(--color-text-primary);
   margin: 0 0 10px 0;
   line-height: 1.4;
+  position: relative;
+  z-index: 2;
 }
 
 .content-meta {
@@ -41,7 +85,7 @@
   justify-content: space-between;
   margin-bottom: 15px;
   font-size: 0.8rem;
-  color: #7f8c8d;
+  color: var(--color-text-secondary);
 }
 
 .content-source {
@@ -49,30 +93,35 @@
 }
 
 .content-date {
-  color: #95a5a6;
+  color: var(--color-text-tertiary);
 }
 
 .content-summary {
-  color: #34495e;
+  color: var(--color-text-primary);
   margin-bottom: 15px;
   font-size: 0.95rem;
   line-height: 1.5;
-  /* Display at most 4 lines of text */
+  /* Display at most 6 lines of text now that we have more space */
   display: -webkit-box;
-  -webkit-line-clamp: 4;
+  -webkit-line-clamp: 6;
   -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
+  position: relative;
+  z-index: 2;
+  margin-top: 15px;
 }
 
 .content-reason {
   font-size: 0.8rem;
-  color: #7f8c8d;
+  color: var(--color-text-secondary);
   font-style: italic;
-  background-color: #f8f9fa;
+  background-color: var(--color-bg-tertiary);
   padding: 8px 12px;
   border-radius: 4px;
   margin-bottom: 15px;
+  position: relative;
+  z-index: 2;
 }
 
 .content-rating {
@@ -80,6 +129,8 @@
   align-items: center;
   gap: 15px;
   margin: 10px 0;
+  position: relative;
+  z-index: 2;
 }
 
 .rating-button {
@@ -87,26 +138,27 @@
   align-items: center;
   gap: 5px;
   background-color: transparent;
-  border: 1px solid #e0e0e0;
+  border: 1px solid var(--color-divider);
   border-radius: 20px;
   padding: 4px 10px;
   font-size: 0.9rem;
   cursor: pointer;
+  color: var(--color-text-secondary);
   transition: all 0.2s;
 }
 
 .rating-button.thumbs-up:hover,
 .rating-button.thumbs-up.active {
-  background-color: #ebfbf0;
-  border-color: #2ecc71;
-  color: #2ecc71;
+  background-color: var(--color-success-bg);
+  border-color: var(--color-success);
+  color: var(--color-success);
 }
 
 .rating-button.thumbs-down:hover,
 .rating-button.thumbs-down.active {
-  background-color: #fdedec;
-  border-color: #e74c3c;
-  color: #e74c3c;
+  background-color: var(--color-danger-bg);
+  border-color: var(--color-danger);
+  color: var(--color-danger);
 }
 
 .rating-count {
@@ -114,86 +166,56 @@
   font-weight: bold;
 }
 
-.content-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 15px;
-}
-
-.read-more-link {
-  color: #3498db;
-  text-decoration: none;
-  font-weight: bold;
-  font-size: 0.9rem;
-  transition: color 0.2s;
-}
-
-.read-more-link:hover {
-  color: #2980b9;
-  text-decoration: underline;
-}
-
-.content-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.action-button {
-  background-color: transparent;
-  border: 1px solid #e0e0e0;
-  border-radius: 4px;
-  padding: 5px 10px;
-  font-size: 0.8rem;
-  color: #7f8c8d;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.action-button:hover {
-  background-color: #f5f5f5;
-  color: #34495e;
-}
+/* Removed footer, read-more-link, and action-button styles */
 
 /* Category-specific styling */
 .content-card .content-category:nth-of-type(1) {
-  background-color: #3498db; /* Default/General - Blue */
+  background-color: var(--color-accent-primary); /* Default/General - Blue */
 }
 
 .content-card[data-category="Tech"] .content-category,
-.content-card .content-category:contains("Tech") {
+.content-card .content-category[data-category="Tech"] {
   background-color: #1abc9c; /* Tech - Turquoise */
 }
 
 .content-card[data-category="Business"] .content-category,
-.content-card .content-category:contains("Business") {
+.content-card .content-category[data-category="Business"] {
   background-color: #9b59b6; /* Business - Purple */
 }
 
 .content-card[data-category="Sports"] .content-category,
-.content-card .content-category:contains("Sports") {
+.content-card .content-category[data-category="Sports"] {
   background-color: #e74c3c; /* Sports - Red */
 }
 
 .content-card[data-category="Entertainment"] .content-category,
-.content-card .content-category:contains("Entertainment") {
+.content-card .content-category[data-category="Entertainment"] {
   background-color: #f39c12; /* Entertainment - Orange */
 }
 
 .content-card[data-category="Health"] .content-category,
-.content-card .content-category:contains("Health") {
+.content-card .content-category[data-category="Health"] {
   background-color: #2ecc71; /* Health - Green */
 }
 
 .content-card[data-category="Politics"] .content-category,
-.content-card .content-category:contains("Politics") {
+.content-card .content-category[data-category="Politics"] {
   background-color: #e67e22; /* Politics - Dark Orange */
 }
+
+/* Removed duplicate card animation */
 
 /* Responsive styling */
 @media screen and (max-width: 768px) {
   .content-card {
     padding: 15px;
+  }
+  
+  .glove-icon {
+    width: 50px;
+    height: 50px;
+    top: -10px;
+    right: -10px;
   }
   
   .content-title {
@@ -209,14 +231,5 @@
     font-size: 0.85rem;
   }
   
-  .content-footer {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-  }
-  
-  .content-actions {
-    width: 100%;
-    justify-content: space-between;
-  }
+  /* Removed footer responsive styling */
 }

@@ -3,6 +3,7 @@ import ContentCard from './components/ContentCard';
 import { contentApi, recommendationsApi, userApi } from './services/api';
 import { useAuth } from './contexts/AuthContext';
 import './Home.css';
+// Using CSS-based approach rather than SVG imports
 
 const Home = () => {
   const { currentUser } = useAuth();
@@ -203,14 +204,27 @@ const Home = () => {
   return (
     <div className="home-container">
       <div className="hero-section">
-        <h1>GlovePost</h1>
-        <p>Your personalized content aggregator</p>
+        {/* Decorative gloves */}
+        <div className="decorative-gloves" aria-hidden="true">
+          <div className="glove-icon" />
+          <div className="glove-icon" />
+          <div className="glove-icon" />
+          <div className="glove-icon" />
+          <div className="glove-icon" />
+        </div>
+        
+        <h1>
+          <div className="hero-icon" aria-hidden="true" />
+          GlovePost
+        </h1>
+        <p>Raising content above the digital clutter</p>
         
         <div className="content-tabs">
           <button 
             className={`tab-button ${activeTab === 'latest' ? 'active' : ''}`}
             onClick={() => handleTabChange('latest')}
           >
+            <div className="tab-icon" aria-hidden="true" />
             Latest
           </button>
           {currentUser && (
@@ -218,10 +232,27 @@ const Home = () => {
               className={`tab-button ${activeTab === 'for-you' ? 'active' : ''}`}
               onClick={() => handleTabChange('for-you')}
             >
+              <div className="tab-icon" aria-hidden="true" />
               For You
             </button>
           )}
         </div>
+        
+        {/* Post visualization */}
+        {activeTab === 'latest' && categories.length > 0 && categories.length <= 5 && (
+          <div className="posts-row" aria-hidden="true">
+            {categories.slice(0, 5).map(category => (
+              <div 
+                key={category} 
+                className="post-item"
+                onClick={() => handleCategoryChange(category)}
+              >
+                <div className="post-icon" />
+                <span className="post-label">{category}</span>
+              </div>
+            ))}
+          </div>
+        )}
         
         {activeTab === 'latest' && categories.length > 0 && (
           <div className="category-filter">
@@ -229,6 +260,7 @@ const Home = () => {
               value={selectedCategory} 
               onChange={(e) => handleCategoryChange(e.target.value)}
               className="category-select"
+              aria-label="Filter by category"
             >
               <option value="all">All Categories</option>
               {categories.map(category => (
@@ -241,7 +273,12 @@ const Home = () => {
         )}
       </div>
 
-      {loading && <div className="loading">Loading content...</div>}
+      {loading && (
+        <div className="loading">
+          <div className="loading-icon" aria-hidden="true" />
+          Picking up gloves...
+        </div>
+      )}
       
       {error && <div className="error">{error}</div>}
       
@@ -253,6 +290,7 @@ const Home = () => {
               .sort(([,a], [,b]) => b - a)
               .map(([category, weight]) => (
                 <span key={category} className="preference-tag">
+                  <div className="preference-icon" aria-hidden="true" />
                   {category}: {weight}%
                 </span>
               ))
@@ -288,6 +326,7 @@ const Home = () => {
       
       {activeContent.length === 0 && !loading && !error && (
         <div className="no-content">
+          <div className="no-content-icon" aria-hidden="true" />
           {activeTab === 'for-you' 
             ? 'No personalized recommendations available yet. Try interacting with some content!' 
             : selectedCategory !== 'all'

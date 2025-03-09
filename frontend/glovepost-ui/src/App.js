@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
 import Home from './Home';
 import Settings from './Settings';
@@ -8,6 +8,7 @@ import ProfileDropdown from './components/ProfileDropdown';
 import UserProfile from './components/UserProfile';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import './App.css';
+// Using CSS-based approach rather than SVG imports
 
 // Protected route component
 const ProtectedRoute = ({ children }) => {
@@ -30,11 +31,40 @@ const ProtectedRoute = ({ children }) => {
 // Main app content with auth context available
 const AppContent = () => {
   const { currentUser, loading } = useAuth();
+  const [darkMode, setDarkMode] = useState(false);
+  
+  // Initialize theme from localStorage on component mount
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme');
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    
+    if (savedTheme === 'dark' || (!savedTheme && prefersDark)) {
+      setDarkMode(true);
+      document.documentElement.setAttribute('data-theme', 'dark');
+    }
+  }, []);
+  
+  // Toggle theme function
+  const toggleTheme = () => {
+    const newDarkMode = !darkMode;
+    setDarkMode(newDarkMode);
+    
+    if (newDarkMode) {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.removeAttribute('data-theme');
+      localStorage.setItem('theme', 'light');
+    }
+  };
   
   return (
     <div className="App">
       <nav className="navbar">
-        <div className="logo">GlovePost</div>
+        <div className="logo">
+          <div className="logo-icon" aria-hidden="true" />
+          GlovePost
+        </div>
         <ul className="nav-links">
           <li>
             <Link to="/">Home</Link>
@@ -58,6 +88,15 @@ const AppContent = () => {
               </li>
             </>
           )}
+          <li>
+            <button 
+              className="theme-toggle" 
+              onClick={toggleTheme}
+              aria-label={darkMode ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              <div className={darkMode ? "sun-icon" : "moon-icon"} aria-hidden="true" />
+            </button>
+          </li>
         </ul>
       </nav>
 

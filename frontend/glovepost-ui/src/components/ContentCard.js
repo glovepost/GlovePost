@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { interactionsApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import './ContentCard.css';
+// Using CSS-based approach rather than SVG imports
 
 const ContentCard = ({ item, showReason = false }) => {
   const { currentUser } = useAuth();
@@ -119,16 +120,21 @@ const ContentCard = ({ item, showReason = false }) => {
   
   // Handle click on the content
   const handleContentClick = async () => {
-    if (!currentUser) return;
+    if (currentUser) {
+      try {
+        await interactionsApi.trackInteraction(
+          null, // userId is determined on the server from authentication
+          getItemId(),
+          'click'
+        );
+      } catch (error) {
+        console.error('Failed to record click:', error);
+      }
+    }
     
-    try {
-      await interactionsApi.trackInteraction(
-        null, // userId is determined on the server from authentication
-        getItemId(),
-        'click'
-      );
-    } catch (error) {
-      console.error('Failed to record click:', error);
+    // Open the URL when clicked
+    if (item.url) {
+      window.open(item.url, '_blank', 'noopener,noreferrer');
     }
   };
   
@@ -284,8 +290,15 @@ const ContentCard = ({ item, showReason = false }) => {
   
   // Normal content card rendering
   return (
-    <div className="content-card" onClick={handleContentClick}>
-      <div className="content-category">{item.category || 'General'}</div>
+    <div className="content-card" onClick={handleContentClick} data-category={item.category}>
+      {/* Add glove icon as a decorative element */}
+      <div className="glove-icon" aria-hidden="true" />
+      
+      <div className="content-category" data-category={item.category}>
+        {item.category || 'General'}
+      </div>
+      
+      
       <h3 className="content-title">{item.title}</h3>
       <div className="content-meta">
         <span className="content-source">{item.source}</span>
@@ -315,26 +328,6 @@ const ContentCard = ({ item, showReason = false }) => {
         </button>
       </div>
       
-      <div className="content-footer">
-        <a 
-          href={item.url} 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="read-more-link"
-          onClick={(e) => e.stopPropagation()}
-        >
-          Read more
-        </a>
-        
-        <div className="content-actions">
-          <button className="action-button" onClick={handleShare}>
-            Share
-          </button>
-          <button className="action-button" onClick={handleBookmark}>
-            Bookmark
-          </button>
-        </div>
-      </div>
     </div>
   );
 };
