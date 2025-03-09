@@ -515,7 +515,7 @@ def generate_mock_facebook_posts(page_name, limit=10):
             'topics': [
                 'Breaking: Tech giant announces revolutionary new AR platform for developers.',
                 'Startup secures $200 million funding to scale their AI-powered healthcare solution.',
-                'Review: We tested the latest smartphone and it's a game-changer for content creators.',
+                'Review: We tested the latest smartphone and it is a game-changer for content creators.',
                 'Cybersecurity alert: New vulnerability discovered affecting millions of devices.',
                 'The future of work: How remote collaboration tools are transforming office culture.'
             ]
@@ -526,10 +526,10 @@ def generate_mock_facebook_posts(page_name, limit=10):
             'category': 'Sports',
             'topics': [
                 'Championship recap: Underdog team makes stunning comeback in final minutes.',
-                'Player profile: Rising star's journey from small-town roots to international fame.',
+                'Player profile: Rising star journey from small-town roots to international fame.',
                 'Breaking transfer news: Top player makes surprise move in record-breaking deal.',
-                'Injury update: Team's star player expected to return just in time for playoffs.',
-                'Analysis: The tactical innovation that's changing how the game is played.'
+                'Injury update: Team star player expected to return just in time for playoffs.',
+                'Analysis: The tactical innovation that is changing how the game is played.'
             ]
         }
     else:
