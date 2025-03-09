@@ -16,6 +16,10 @@ import logging
 import argparse
 from urllib.parse import urlparse, urljoin
 import sys
+import urllib3
+
+# Disable SSL warnings for testing
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Optional dependencies - handle gracefully if not available
 try:
