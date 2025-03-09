@@ -1,0 +1,313 @@
+{
+  "rss": [
+    {
+      "url": "https://www.aljazeera.com/xml/rss/all.xml",
+      "name": "Al Jazeera",
+      "category": "News"
+    },
+    {
+      "url": "https://www.reutersagency.com/feed/?taxonomy=best-regions&post_type=best",
+      "name": "Reuters",
+      "category": "News"
+    },
+    {
+      "url": "https://www.ap.org/rss",
+      "name": "Associated Press",
+      "category": "News"
+    },
+    {
+      "url": "https://www.npr.org/rss/rss.php?id=1001",
+      "name": "NPR",
+      "category": "News"
+    },
+    {
+      "url": "https://feeds.washingtonpost.com/rss/world",
+      "name": "The Washington Post",
+      "category": "News"
+    },
+    {
+      "url": "https://feeds.arstechnica.com/arstechnica/index",
+      "name": "Ars Technica",
+      "category": "Tech"
+    },
+    {
+      "url": "https://www.techradar.com/rss",
+      "name": "TechRadar",
+      "category": "Tech"
+    },
+    {
+      "url": "https://venturebeat.com/feed/",
+      "name": "VentureBeat",
+      "category": "Tech"
+    },
+    {
+      "url": "https://www.theverge.com/rss/index.xml",
+      "name": "The Verge",
+      "category": "Tech"
+    },
+    {
+      "url": "https://www.technologyreview.com/feed/",
+      "name": "MIT Technology Review",
+      "category": "Tech"
+    },
+    {
+      "url": "https://www.scientificamerican.com/rss/",
+      "name": "Scientific American",
+      "category": "Science"
+    },
+    {
+      "url": "https://www.nature.com/nature.rss",
+      "name": "Nature",
+      "category": "Science"
+    },
+    {
+      "url": "https://www.newscientist.com/feed/home/",
+      "name": "New Scientist",
+      "category": "Science"
+    },
+    {
+      "url": "https://phys.org/rss-feed/",
+      "name": "Phys.org",
+      "category": "Science"
+    },
+    {
+      "url": "https://www.sciencedaily.com/rss/all.xml",
+      "name": "ScienceDaily",
+      "category": "Science"
+    },
+    {
+      "url": "https://variety.com/feed/",
+      "name": "Variety",
+      "category": "Entertainment"
+    },
+    {
+      "url": "https://www.hollywoodreporter.com/feed/",
+      "name": "The Hollywood Reporter",
+      "category": "Entertainment"
+    },
+    {
+      "url": "https://pitchfork.com/rss/news/",
+      "name": "Pitchfork",
+      "category": "Entertainment"
+    },
+    {
+      "url": "https://feeds.feedburner.com/ign/all",
+      "name": "IGN",
+      "category": "Entertainment"
+    },
+    {
+      "url": "https://deadline.com/feed/",
+      "name": "Deadline",
+      "category": "Entertainment"
+    },
+    {
+      "url": "https://www.espn.com/espn/rss/news",
+      "name": "ESPN",
+      "category": "Sports"
+    },
+    {
+      "url": "https://bleacherreport.com/feed.rss",
+      "name": "Bleacher Report",
+      "category": "Sports"
+    },
+    {
+      "url": "https://www.skysports.com/rss",
+      "name": "Sky Sports",
+      "category": "Sports"
+    },
+    {
+      "url": "https://sports.yahoo.com/rss/",
+      "name": "Yahoo Sports",
+      "category": "Sports"
+    },
+    {
+      "url": "https://www.bloomberg.com/feed/businessweek",
+      "name": "Bloomberg",
+      "category": "Business"
+    },
+    {
+      "url": "https://www.forbes.com/news/feed/",
+      "name": "Forbes",
+      "category": "Business"
+    },
+    {
+      "url": "https://www.ft.com/?format=rss",
+      "name": "Financial Times",
+      "category": "Business"
+    },
+    {
+      "url": "https://www.entrepreneur.com/feed",
+      "name": "Entrepreneur",
+      "category": "Business"
+    },
+    {
+      "url": "https://www.cnbc.com/id/100003114/device/rss/rss.html",
+      "name": "CNBC",
+      "category": "Business"
+    },
+    {
+      "url": "https://hackaday.com/feed/",
+      "name": "Hackaday",
+      "category": "Tech"
+    },
+    {
+      "url": "https://boingboing.net/feed",
+      "name": "Boing Boing",
+      "category": "Tech"
+    },
+    {
+      "url": "https://www.iflscience.com/rss.xml",
+      "name": "IFLScience",
+      "category": "Science"
+    },
+    {
+      "url": "https://www.quantamagazine.org/feed/",
+      "name": "Quanta Magazine",
+      "category": "Science"
+    },
+    {
+      "url": "https://www.avclub.com/feed",
+      "name": "AV Club",
+      "category": "Entertainment"
+    },
+    {
+      "url": "https://kotaku.com/rss",
+      "name": "Kotaku",
+      "category": "Entertainment"
+    },
+    {
+      "url": "https://www.inc.com/rss.xml",
+      "name": "Inc.",
+      "category": "Business"
+    },
+    {
+      "url": "https://www.fastcompany.com/feed",
+      "name": "Fast Company",
+      "category": "Business"
+    }
+  ],
+  "twitter": [
+    {"handle": "AP", "category": "News"},
+    {"handle": "Reuters", "category": "News"},
+    {"handle": "NPR", "category": "News"},
+    {"handle": "AFP", "category": "News"},
+    {"handle": "BreakingNews", "category": "News"},
+    {"handle": "TechCrunch", "category": "Tech"},
+    {"handle": "arstechnica", "category": "Tech"},
+    {"handle": "verge", "category": "Tech"},
+    {"handle": "WIRED", "category": "Tech"},
+    {"handle": "MITTechReview", "category": "Tech"},
+    {"handle": "SciAm", "category": "Science"},
+    {"handle": "nature", "category": "Science"},
+    {"handle": "newscientist", "category": "Science"},
+    {"handle": "NASA", "category": "Science"},
+    {"handle": "NatGeoScience", "category": "Science"},
+    {"handle": "Variety", "category": "Entertainment"},
+    {"handle": "THR", "category": "Entertainment"},
+    {"handle": "pitchfork", "category": "Entertainment"},
+    {"handle": "IGN", "category": "Entertainment"},
+    {"handle": "Deadline", "category": "Entertainment"},
+    {"handle": "ESPNSports", "category": "Sports"},
+    {"handle": "BleacherReport", "category": "Sports"},
+    {"handle": "SkySports", "category": "Sports"},
+    {"handle": "YahooSports", "category": "Sports"},
+    {"handle": "BBCSport", "category": "Sports"},
+    {"handle": "Bloomberg", "category": "Business"},
+    {"handle": "Forbes", "category": "Business"},
+    {"handle": "FT", "category": "Business"},
+    {"handle": "Entrepreneur", "category": "Business"},
+    {"handle": "CNBC", "category": "Business"}
+  ],
+  "facebook": [
+    {"page": "AlJazeeraEnglish", "category": "News"},
+    {"page": "Reuters", "category": "News"},
+    {"page": "NPR", "category": "News"},
+    {"page": "AssociatedPress", "category": "News"},
+    {"page": "WashingtonPost", "category": "News"},
+    {"page": "ArsTechnica", "category": "Tech"},
+    {"page": "TechRadar", "category": "Tech"},
+    {"page": "VentureBeat", "category": "Tech"},
+    {"page": "TheVerge", "category": "Tech"},
+    {"page": "MITTechReview", "category": "Tech"},
+    {"page": "ScientificAmerican", "category": "Science"},
+    {"page": "NatureJournal", "category": "Science"},
+    {"page": "NewScientist", "category": "Science"},
+    {"page": "PhysOrg", "category": "Science"},
+    {"page": "ScienceDaily", "category": "Science"},
+    {"page": "Variety", "category": "Entertainment"},
+    {"page": "HollywoodReporter", "category": "Entertainment"},
+    {"page": "PitchforkMedia", "category": "Entertainment"},
+    {"page": "IGN", "category": "Entertainment"},
+    {"page": "DeadlineHollywood", "category": "Entertainment"},
+    {"page": "ESPN", "category": "Sports"},
+    {"page": "BleacherReport", "category": "Sports"},
+    {"page": "TheAthletic", "category": "Sports"},
+    {"page": "SkySportsNews", "category": "Sports"},
+    {"page": "YahooSports", "category": "Sports"},
+    {"page": "BloombergNews", "category": "Business"},
+    {"page": "Forbes", "category": "Business"},
+    {"page": "FinancialTimes", "category": "Business"},
+    {"page": "EntrepreneurMag", "category": "Business"},
+    {"page": "CNBC", "category": "Business"}
+  ],
+  "reddit": [
+    {"subreddit": "news", "category": "News"},
+    {"subreddit": "worldnews", "category": "News"},
+    {"subreddit": "politics", "category": "News"},
+    {"subreddit": "UpliftingNews", "category": "News"},
+    {"subreddit": "inthenews", "category": "News"},
+    {"subreddit": "nottheonion", "category": "News"},
+    {"subreddit": "technology", "category": "Tech"},
+    {"subreddit": "gadgets", "category": "Tech"},
+    {"subreddit": "programming", "category": "Tech"},
+    {"subreddit": "cybersecurity", "category": "Tech"},
+    {"subreddit": "dataisbeautiful", "category": "Tech"},
+    {"subreddit": "tech", "category": "Tech"},
+    {"subreddit": "science", "category": "Science"},
+    {"subreddit": "space", "category": "Science"},
+    {"subreddit": "askscience", "category": "Science"},
+    {"subreddit": "biology", "category": "Science"},
+    {"subreddit": "physics", "category": "Science"},
+    {"subreddit": "chemistry", "category": "Science"},
+    {"subreddit": "movies", "category": "Entertainment"},
+    {"subreddit": "television", "category": "Entertainment"},
+    {"subreddit": "music", "category": "Entertainment"},
+    {"subreddit": "gaming", "category": "Entertainment"},
+    {"subreddit": "books", "category": "Entertainment"},
+    {"subreddit": "nba", "category": "Sports"},
+    {"subreddit": "soccer", "category": "Sports"},
+    {"subreddit": "nfl", "category": "Sports"},
+    {"subreddit": "sports", "category": "Sports"},
+    {"subreddit": "mma", "category": "Sports"},
+    {"subreddit": "economics", "category": "Business"},
+    {"subreddit": "investing", "category": "Business"},
+    {"subreddit": "stocks", "category": "Business"},
+    {"subreddit": "finance", "category": "Business"},
+    {"subreddit": "business", "category": "Business"}
+  ],
+  "4chan": [
+    {"board": "g", "category": "Tech", "name": "Technology"},
+    {"board": "sci", "category": "Science", "name": "Science & Math"},
+    {"board": "diy", "category": "Tech", "name": "Do It Yourself"},
+    {"board": "news", "category": "News", "name": "Current Events"},
+    {"board": "pol", "category": "News", "name": "Politically Incorrect"},
+    {"board": "tv", "category": "Entertainment", "name": "Television & Film"},
+    {"board": "mu", "category": "Entertainment", "name": "Music"},
+    {"board": "v", "category": "Entertainment", "name": "Video Games"},
+    {"board": "lit", "category": "Entertainment", "name": "Literature"},
+    {"board": "fit", "category": "Health", "name": "Fitness"},
+    {"board": "trv", "category": "Travel", "name": "Travel"}
+  ],
+  "youtube": [
+    {"channel_id": "UC16niRr50-MSBwiO3YDb3RA", "name": "BBC News", "category": "News"},
+    {"channel_id": "UC1raC6frVJQhitX50qZCnJQ", "name": "Al Jazeera English", "category": "News"},
+    {"channel_id": "UCXuqSBlHAE6Xw-yeJA0Tunw", "name": "Linus Tech Tips", "category": "Tech"},
+    {"channel_id": "UCBJycsmduvYEL83R_U4JriQ", "name": "Marques Brownlee", "category": "Tech"},
+    {"channel_id": "UC8L5T22z0s4tXSP-b6P7KBA", "name": "Veritasium", "category": "Science"},
+    {"channel_id": "UCsXVk37bltHxD1rDPwtNM8Q", "name": "Kurzgesagt", "category": "Science"},
+    {"channel_id": "UCVvQzv0fVltWnzwz9QEN1Mw", "name": "IGN", "category": "Entertainment"},
+    {"channel_id": "UCU8Lmn6vN-6_VH_s2W2O7tw", "name": "Screen Junkies", "category": "Entertainment"},
+    {"channel_id": "UCiWLfSweyRNmLpgEHvQtwcQ", "name": "ESPN", "category": "Sports"},
+    {"channel_id": "UCNAf1k0yIjyGu3k9BwAg3lg", "name": "Sky Sports", "category": "Sports"}
+  ]
+}

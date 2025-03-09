@@ -49,6 +49,10 @@ except ImportError:
 # Check custom scrapers
 REDDIT_SCRAPER_AVAILABLE = os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'reddit_scraper.py'))
 FOURCHAN_SCRAPER_AVAILABLE = os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), '4chan_scraper.py'))
+YOUTUBE_SCRAPER_AVAILABLE = os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'youtube_scraper.py'))
+
+# Check for sources config file
+SOURCES_CONFIG_AVAILABLE = os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sources.json'))
 
 # Set up logging
 logs_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
@@ -65,14 +69,17 @@ logger = logging.getLogger("ContentAggregator")
 
 # Parse command-line arguments
 parser = argparse.ArgumentParser(description='Fetch and store content from various sources')
-parser.add_argument('--sources', nargs='+', choices=['rss', 'x', 'facebook', '4chan', 'reddit'], 
+parser.add_argument('--sources', nargs='+', choices=['rss', 'x', 'facebook', '4chan', 'reddit', 'youtube'], 
                     default=['rss', 'x', 'facebook'], help='Content sources to fetch from')
 parser.add_argument('--limit', type=int, default=100, help='Maximum items to fetch per source')
 parser.add_argument('--dryrun', action='store_true', help='Run without saving to database')
+parser.add_argument('--config', type=str, default='sources.json', help='Path to sources config file')
 parser.add_argument('--reddit-subreddits', type=str, default='news,technology,worldnews,science',
-                    help='Comma-separated list of subreddits to scrape')
-parser.add_argument('--4chan-boards', type=str, default='g,pol,news,sci',  # Updated default
-                    help='Comma-separated list of 4chan boards to scrape')
+                    help='Comma-separated list of subreddits to scrape (overridden by config file if used)')
+parser.add_argument('--4chan-boards', type=str, default='g,pol,news,sci',
+                    help='Comma-separated list of 4chan boards to scrape (overridden by config file if used)')
+parser.add_argument('--youtube-channels', type=str, default='',
+                    help='Comma-separated list of YouTube channel IDs to scrape (overridden by config file if used)')
 args = parser.parse_args()
 
 # MongoDB setup
@@ -142,15 +149,44 @@ def fetch_4chan_posts(limit=30, max_retries=3) -> List[Dict[str, Any]]:
         return generate_mock_4chan_posts(limit)
     
     scraper_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '4chan_scraper.py')
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), args.config) if SOURCES_CONFIG_AVAILABLE else None
     boards = args.__dict__.get('4chan_boards', 'g,pol,news,sci')
     scraper_limit = min(limit, 50)
     
     for attempt in range(max_retries):
         try:
-            cmd = [sys.executable, scraper_path, '--boards', boards, '--limit', str(scraper_limit)]
+            # Use the virtual environment Python interpreter
+            venv_python = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'venv', 'bin', 'python')
+            cmd = [venv_python if os.path.exists(venv_python) else sys.executable, scraper_path, '--boards', boards, '--limit', str(scraper_limit)]
             logger.info(f"Attempt {attempt + 1}/{max_retries}: Running command: {' '.join(cmd)}")
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            content = json.loads(result.stdout)
+            # Extract the JSON part of the output by finding last occurrence of [
+            stdout = result.stdout
+            json_start = stdout.rfind('[')
+            if json_start == -1:
+                raise ValueError("No JSON data found in output")
+                
+            # Find the matching closing bracket
+            json_data = stdout[json_start:]
+            
+            # Simple JSON extraction that handles nested arrays
+            bracket_count = 0
+            for i, char in enumerate(json_data):
+                if char == '[':
+                    bracket_count += 1
+                elif char == ']':
+                    bracket_count -= 1
+                    if bracket_count == 0:
+                        # Found the matching closing bracket
+                        json_data = json_data[:i+1]
+                        break
+            
+            try:
+                content = json.loads(json_data)
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse JSON: {e}, Data: {json_data[:100]}...")
+                raise
+                
             logger.info(f"Fetched {len(content)} posts from 4chan")
             return [{
                 'title': item.get('title', 'Untitled 4chan Post'),
@@ -201,6 +237,89 @@ def generate_mock_4chan_posts(limit: int = 30) -> List[Dict[str, Any]]:
         })
     return mock_posts
 
+def fetch_youtube_videos(limit: int = 30, max_retries: int = 3) -> List[Dict[str, Any]]:
+    """Fetch YouTube videos with retries."""
+    logger.info("Fetching YouTube videos")
+    if not YOUTUBE_SCRAPER_AVAILABLE:
+        logger.warning("YouTube scraper not found, using mock data")
+        return []
+    
+    scraper_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'youtube_scraper.py')
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), args.config) if SOURCES_CONFIG_AVAILABLE else None
+    channels = args.__dict__.get('youtube_channels', '')
+    scraper_limit = min(limit, 50)
+    
+    for attempt in range(max_retries):
+        try:
+            # Use the virtual environment Python interpreter
+            venv_python = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'venv', 'bin', 'python')
+            cmd = [venv_python if os.path.exists(venv_python) else sys.executable, scraper_path]
+            
+            # Use config file if available
+            if config_path:
+                cmd.extend(['--config', config_path])
+            elif channels:
+                cmd.extend(['--channels', channels])
+                
+            cmd.extend(['--workers', '4'])
+            logger.info(f"Attempt {attempt + 1}/{max_retries}: Running command: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            # Extract the JSON part of the output by finding last occurrence of [
+            stdout = result.stdout
+            json_start = stdout.rfind('[')
+            if json_start == -1:
+                raise ValueError("No JSON data found in output")
+                
+            # Find the matching closing bracket
+            json_data = stdout[json_start:]
+            
+            # Simple JSON extraction that handles nested arrays
+            bracket_count = 0
+            for i, char in enumerate(json_data):
+                if char == '[':
+                    bracket_count += 1
+                elif char == ']':
+                    bracket_count -= 1
+                    if bracket_count == 0:
+                        # Found the matching closing bracket
+                        json_data = json_data[:i+1]
+                        break
+            
+            try:
+                content = json.loads(json_data)
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse JSON: {e}, Data: {json_data[:100]}...")
+                raise
+                
+            logger.info(f"Fetched {len(content)} videos from YouTube")
+            return [{
+                'title': item.get('title', 'Untitled YouTube Video'),
+                'summary': item.get('content_summary', ''),
+                'source': item.get('source', 'YouTube'),
+                'link': item.get('url', '#'),
+                'published': item.get('timestamp', datetime.datetime.now().isoformat()),
+                'author': item.get('author', 'YouTuber'),
+                'category': item.get('category', 'Entertainment'),
+                'upvotes': item.get('upvotes', 0),
+                'downvotes': item.get('downvotes', 0),
+                'engagement_score': item.get('engagement_score', 0)
+            } for item in content]
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Attempt {attempt + 1} failed with exit code {e.returncode}")
+            logger.error(f"STDERR: {e.stderr}")
+            logger.error(f"STDOUT: {e.stdout}")
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)  # Exponential backoff
+            else:
+                logger.warning("Max retries reached. Returning empty list.")
+                return []
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse output: {e}. Raw: {result.stdout}")
+            return []
+        except Exception as e:
+            logger.error(f"Unexpected error: {str(e)}")
+            return []
+
 def fetch_reddit_posts(limit: int = 50, max_retries: int = 3) -> List[Dict[str, Any]]:
     """Fetch reddit posts with retries."""
     logger.info("Fetching Reddit posts")
@@ -209,15 +328,44 @@ def fetch_reddit_posts(limit: int = 50, max_retries: int = 3) -> List[Dict[str, 
         return []  # TODO: Replace with generate_mock_reddit_posts(limit)
     
     scraper_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'reddit_scraper.py')
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), args.config) if SOURCES_CONFIG_AVAILABLE else None
     subreddits = args.__dict__.get('reddit_subreddits', 'news,technology,worldnews,science')
     scraper_limit = min(limit, 50)
     
     for attempt in range(max_retries):
         try:
-            cmd = [sys.executable, scraper_path, '--subreddits', subreddits, '--limit', str(scraper_limit)]
+            # Use the virtual environment Python interpreter
+            venv_python = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'venv', 'bin', 'python')
+            cmd = [venv_python if os.path.exists(venv_python) else sys.executable, scraper_path, '--subreddits', subreddits, '--limit', str(scraper_limit)]
             logger.info(f"Attempt {attempt + 1}/{max_retries}: Running command: {' '.join(cmd)}")
             result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-            content = json.loads(result.stdout)
+            # Extract the JSON part of the output by finding last occurrence of [
+            stdout = result.stdout
+            json_start = stdout.rfind('[')
+            if json_start == -1:
+                raise ValueError("No JSON data found in output")
+                
+            # Find the matching closing bracket
+            json_data = stdout[json_start:]
+            
+            # Simple JSON extraction that handles nested arrays
+            bracket_count = 0
+            for i, char in enumerate(json_data):
+                if char == '[':
+                    bracket_count += 1
+                elif char == ']':
+                    bracket_count -= 1
+                    if bracket_count == 0:
+                        # Found the matching closing bracket
+                        json_data = json_data[:i+1]
+                        break
+            
+            try:
+                content = json.loads(json_data)
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse JSON: {e}, Data: {json_data[:100]}...")
+                raise
+                
             logger.info(f"Fetched {len(content)} posts from Reddit")
             return [{
                 'title': item.get('title', 'Untitled Reddit Post'),
@@ -275,7 +423,8 @@ def store_content(dry_run=False):
         'rss': fetch_rss_feeds if ('rss' in args.sources and FEEDPARSER_AVAILABLE) else None,
         'facebook': fetch_facebook_posts if ('facebook' in args.sources and REQUESTS_AVAILABLE) else None,
         '4chan': fetch_4chan_posts if ('4chan' in args.sources and (REQUESTS_AVAILABLE or FOURCHAN_SCRAPER_AVAILABLE)) else None,
-        'reddit': fetch_reddit_posts if ('reddit' in args.sources and (REQUESTS_AVAILABLE or REDDIT_SCRAPER_AVAILABLE)) else None
+        'reddit': fetch_reddit_posts if ('reddit' in args.sources and (REQUESTS_AVAILABLE or REDDIT_SCRAPER_AVAILABLE)) else None,
+        'youtube': fetch_youtube_videos if ('youtube' in args.sources and YOUTUBE_SCRAPER_AVAILABLE) else None
     }
     
     # Filter out None values

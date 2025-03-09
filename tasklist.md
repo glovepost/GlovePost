@@ -21,6 +21,10 @@
     - [x] Enhance quality filter (e.g., minimum word count, spam keyword blacklist)
     - [x] Implement advanced filtering algorithms to strip away noise and fluff
     - [x] Develop heuristic rules to identify and remove low-quality content (e.g., clickbait, ads)
+  - [x] Implement centralized source configuration system
+    - [x] Create `sources.json` for unified source management
+    - [x] Structure configuration by source type (RSS, Twitter, Facebook, Reddit, 4chan, YouTube)
+    - [x] Include category mapping and source metadata
 - **Pending:**
   - [ ] Integrate more advanced natural language processing (NLP) techniques to assess content relevance and quality
   - [ ] Implement tracking of source reliability and content quality over time
@@ -35,6 +39,23 @@
     - [x] Use `requests` and `beautifulsoup4` to scrape public subreddits (e.g., r/news, r/technology)
     - [x] Parse posts for `title`, `content_summary` (self-text or link description), `url`, `timestamp`
     - [x] Avoid Reddit API to keep costs down, relying on scraping within legal bounds
+- **New Tasks (YouTube Integration):**
+  - [x] Implement YouTube content retrieval via RSS feeds
+    - [x] Create `youtube_scraper.py` to fetch videos from YouTube channels
+    - [x] Parse RSS feeds from YouTube channels using channel IDs
+    - [x] Extract video titles, descriptions, links, and publish dates
+    - [x] Integrate with content aggregator system
+  - [x] Add YouTube sources to configuration
+    - [x] Include 10+ diverse YouTube channels across categories
+    - [x] Organize by content category (News, Tech, Science, Entertainment, Sports)
+- **New Tasks (Source Expansion):**
+  - [x] Expanded sources for all content types
+    - [x] Added 35+ RSS feed sources across 6 categories
+    - [x] Added 30 Twitter accounts for current news and updates
+    - [x] Added 30 Facebook pages for diverse content
+    - [x] Added 30+ Reddit subreddits for community-curated content
+    - [x] Added 11 4chan boards for niche discussions
+    - [x] Added 10 YouTube channels for video content
 - **New Tasks (from Research - Search Functionality):**
   - [ ] Set up indexing for efficient searching
     - [ ] Use MongoDB text search or integrate ElasticSearch for advanced search capabilities
