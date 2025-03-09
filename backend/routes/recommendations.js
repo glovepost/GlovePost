@@ -76,6 +76,10 @@ router.get('/:userId', async (req, res) => {
     console.log('Using virtual environment python at:', pythonPath);
     console.log('Running recommendation engine at:', pythonScriptPath);
     
+    // Log what we're passing to Python
+    console.log('Sending preferences to Python:', preferences);
+    console.log('Stringified preferences:', JSON.stringify(preferences));
+
     const python = spawn(pythonPath, [
       pythonScriptPath,
       '--user', userId,
@@ -110,19 +114,26 @@ router.get('/:userId', async (req, res) => {
       }
       
       try {
+        // Log the raw data for debugging
+        console.log('Raw Python output:', data);
+        
         // Find the JSON part of the output (ignoring any print statements)
         const jsonStart = data.indexOf('[');
         if (jsonStart === -1) {
+          console.error('No JSON data found in Python output');
           throw new Error('No JSON data found in Python output');
         }
         
         const jsonData = data.substring(jsonStart);
+        console.log('JSON portion:', jsonData);
+        
         const recommendations = JSON.parse(jsonData);
         
         // Return empty array if no recommendations, otherwise return recommendations
         res.json(recommendations.length > 0 ? recommendations : generateMockRecommendations());
       } catch (error) {
         console.error('Error parsing recommendations:', error);
+        console.error('Falling back to mock recommendations');
         res.json(generateMockRecommendations());
       }
     });

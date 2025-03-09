@@ -12,8 +12,11 @@ async function connectToMongo() {
     const client = new MongoClient(process.env.MONGO_URI);
     await client.connect();
     
-    db = client.db('glovepostDB');
-    contentCollection = db.collection('content');
+    // Connect to the 'glovepost' database, not 'glovepostDB'
+    db = client.db('glovepost');
+    
+    // Connect to the 'contents' collection - this is the correct name
+    contentCollection = db.collection('contents');
     
     // Create indexes for better performance
     await contentCollection.createIndex({ category: 1 });
@@ -29,6 +32,10 @@ async function connectToMongo() {
 }
 
 class Content {
+  // Export the connectToMongo function for external use
+  static connectToMongo() {
+    return connectToMongo();
+  }
   // Get content by ID
   static async getById(id) {
     await connectToMongo();

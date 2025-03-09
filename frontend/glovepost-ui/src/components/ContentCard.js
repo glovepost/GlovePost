@@ -1,22 +1,73 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { interactionsApi } from '../services/api';
+import { useAuth } from '../contexts/AuthContext';
 import './ContentCard.css';
 
-// Default user ID - in a real app this would come from auth context
-const DEFAULT_USER_ID = 1;
-
 const ContentCard = ({ item, showReason = false }) => {
+  const { currentUser } = useAuth();
   const [userRating, setUserRating] = useState(null);
-  const [ratingCount, setRatingCount] = useState({ up: item.upvotes || 0, down: item.downvotes || 0 });
+  const [ratingCount, setRatingCount] = useState({ up: 0, down: 0 });
+  
+  // Detailed validation of item
+  const validateItem = () => {
+    if (!item) {
+      console.error('ContentCard received null or undefined item');
+      return false;
+    }
+    
+    const hasTitle = Boolean(item.title);
+    const hasSummary = Boolean(item.content_summary);
+    
+    if (!hasTitle) console.error('ContentCard: Missing title in item', item);
+    if (!hasSummary) console.error('ContentCard: Missing content_summary in item', item);
+    
+    return hasTitle && hasSummary;
+  };
+  
+  // Check if the item is valid
+  const isValidItem = validateItem();
+  
+  // Get the item ID in a safe way
+  // Define as a memoized value that doesn't change
+  const getItemId = useCallback(() => {
+    if (!item) return '';
+    
+    if (typeof item._id === 'string') {
+      return item._id;
+    }
+    if (item._id && item._id.$oid) {
+      return item._id.$oid;
+    }
+    if (item._id && typeof item._id.toString === 'function') {
+      return item._id.toString();
+    }
+    return `${item.title || ''}-${item.source || ''}`;
+  }, [item]);
+  
+  // Set initial rating counts
+  useEffect(() => {
+    if (item) {
+      setRatingCount({ 
+        up: item.upvotes || 0, 
+        down: item.downvotes || 0 
+      });
+    }
+  }, [item]);
 
   // Track when user views the content and fetch user rating and rating counts
-  React.useEffect(() => {
+  useEffect(() => {
+    // Skip if item is invalid
+    if (!isValidItem) return;
+    
     // Record a view interaction
     const recordView = async () => {
+      // Only record view if user is logged in
+      if (!currentUser) return;
+      
       try {
         await interactionsApi.trackInteraction(
-          DEFAULT_USER_ID,
-          item._id,
+          null, // userId is determined on the server
+          getItemId(),
           'view'
         );
       } catch (error) {
@@ -27,13 +78,17 @@ const ContentCard = ({ item, showReason = false }) => {
     
     // Fetch user's existing rating for this content
     const fetchUserRating = async () => {
+      // Only fetch rating if user is logged in
+      if (!currentUser) return;
+      
       try {
-        const response = await fetch(`http://localhost:3000/interaction/user-rating/${DEFAULT_USER_ID}/${item._id}`);
-        const data = await response.json();
+        // Use the interactionsApi instead of direct fetch
+        const response = await interactionsApi.getUserRating(getItemId());
+        const rating = response.data?.rating;
         
-        if (data.rating === 1) {
+        if (rating === 1) {
           setUserRating('up');
-        } else if (data.rating === -1) {
+        } else if (rating === -1) {
           setUserRating('down');
         }
       } catch (error) {
@@ -45,7 +100,7 @@ const ContentCard = ({ item, showReason = false }) => {
     // Fetch current rating counts
     const fetchRatingCounts = async () => {
       try {
-        const response = await interactionsApi.getRatings(item._id);
+        const response = await interactionsApi.getRatings(getItemId());
         setRatingCount({
           up: response.data.upvotes || 0,
           down: response.data.downvotes || 0
@@ -60,14 +115,16 @@ const ContentCard = ({ item, showReason = false }) => {
     recordView();
     fetchUserRating();
     fetchRatingCounts();
-  }, [item._id]);
+  }, [currentUser, getItemId, isValidItem]);
   
   // Handle click on the content
   const handleContentClick = async () => {
+    if (!currentUser) return;
+    
     try {
       await interactionsApi.trackInteraction(
-        DEFAULT_USER_ID,
-        item._id,
+        null, // userId is determined on the server from authentication
+        getItemId(),
         'click'
       );
     } catch (error) {
@@ -80,11 +137,16 @@ const ContentCard = ({ item, showReason = false }) => {
     e.preventDefault();
     e.stopPropagation();
     
+    if (!currentUser) {
+      alert("Please log in to share content");
+      return;
+    }
+    
     try {
       // Record the interaction
       await interactionsApi.trackInteraction(
-        DEFAULT_USER_ID,
-        item._id,
+        null, // userId is determined on the server from authentication
+        getItemId(),
         'share'
       );
       
@@ -100,11 +162,16 @@ const ContentCard = ({ item, showReason = false }) => {
     e.preventDefault();
     e.stopPropagation();
     
+    if (!currentUser) {
+      alert("Please log in to bookmark content");
+      return;
+    }
+    
     try {
       // Record the interaction
       await interactionsApi.trackInteraction(
-        DEFAULT_USER_ID,
-        item._id,
+        null, // userId is determined on the server from authentication
+        getItemId(),
         'bookmark'
       );
       
@@ -120,14 +187,19 @@ const ContentCard = ({ item, showReason = false }) => {
     e.preventDefault();
     e.stopPropagation();
     
+    if (!currentUser) {
+      alert("Please log in to rate content");
+      return;
+    }
+    
     // Don't do anything if user clicks the same rating again
     if (userRating === rating) return;
     
     try {
       // Record the interaction with rating value (1 for up, -1 for down)
       await interactionsApi.trackInteraction(
-        DEFAULT_USER_ID,
-        item._id,
+        null, // userId is determined on the server from authentication
+        getItemId(),
         'rating',
         rating === 'up' ? 1 : -1
       );
@@ -162,15 +234,55 @@ const ContentCard = ({ item, showReason = false }) => {
   };
   
   // Format published date
-  const formatDate = (dateString) => {
+  const formatDate = (dateInput) => {
     try {
-      const date = new Date(dateString);
+      let date;
+      
+      // Handle different date formats
+      if (typeof dateInput === 'string') {
+        // ISO string from API
+        date = new Date(dateInput);
+      } else if (dateInput instanceof Date) {
+        // Already a Date object
+        date = dateInput;
+      } else if (dateInput && dateInput.$date) {
+        // MongoDB format with $date field
+        date = new Date(dateInput.$date);
+      } else if (typeof dateInput === 'object' && dateInput !== null) {
+        // Try converting timestamp objects
+        // For MongoDB ISODate or timestamp objects
+        const timestamp = 
+          dateInput.toString ? dateInput.toString() : 
+          JSON.stringify(dateInput);
+        date = new Date(timestamp);
+      } else {
+        // Fallback - current date
+        return 'Unknown date';
+      }
+      
+      // Check if date is valid before formatting
+      if (isNaN(date.getTime())) {
+        return 'Invalid date';
+      }
+      
       return date.toLocaleDateString();
     } catch (e) {
+      console.error('Error formatting date:', e, dateInput);
       return 'Unknown date';
     }
   };
   
+  // If the item is not valid, return an error card
+  if (!isValidItem) {
+    return (
+      <div className="content-card error">
+        <h3 className="content-title">Invalid Content Item</h3>
+        <p className="content-summary">This content item could not be displayed properly.</p>
+      </div>
+    );
+  }
+  
+  // Normal content card rendering
   return (
     <div className="content-card" onClick={handleContentClick}>
       <div className="content-category">{item.category || 'General'}</div>

@@ -1,27 +1,33 @@
 import React, { useEffect, useState } from 'react';
 import ContentCard from './components/ContentCard';
 import { contentApi, recommendationsApi, userApi } from './services/api';
+import { useAuth } from './contexts/AuthContext';
 import './Home.css';
 
-// Default user ID - in a real app this would come from auth context
-const DEFAULT_USER_ID = 1;
-
 const Home = () => {
+  const { currentUser } = useAuth();
+  
   const [latestContent, setLatestContent] = useState([]);
   const [filteredContent, setFilteredContent] = useState([]);
   const [recommendations, setRecommendations] = useState([]);
   const [activeTab, setActiveTab] = useState('latest');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [userPreferences, setUserPreferences] = useState(null);
+  const [userPreferences, setUserPreferences] = useState({});
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('all');
 
   // Fetch user preferences
   useEffect(() => {
     const fetchUserPreferences = async () => {
+      if (!currentUser) {
+        // Not logged in, use empty preferences
+        setUserPreferences({});
+        return;
+      }
+      
       try {
-        const response = await userApi.getUser(DEFAULT_USER_ID);
+        const response = await userApi.getCurrentUser();
         setUserPreferences(response.data.preferences || {});
       } catch (err) {
         console.error('Error fetching user preferences:', err);
@@ -31,20 +37,48 @@ const Home = () => {
     };
 
     fetchUserPreferences();
-  }, []);
+  }, [currentUser]);
 
-  // Fetch latest content from API
+  // Fetch latest content and categories from API
   useEffect(() => {
     const fetchContent = async () => {
       try {
         setLoading(true);
-        const response = await contentApi.getLatest();
-        const content = response.data;
-        setLatestContent(content);
         
-        // Extract unique categories
-        const uniqueCategories = [...new Set(content.map(item => item.category))];
-        setCategories(uniqueCategories);
+        // Fetch latest content and categories in parallel
+        const [contentResponse, categoriesResponse] = await Promise.all([
+          contentApi.getLatest(50),
+          contentApi.getCategories()
+        ]);
+        
+        // Log the response for debugging
+        console.log('Content API response:', contentResponse);
+        
+        const content = contentResponse.data;
+        
+        // Validate and fix any data issues
+        const validatedContent = content.map(item => {
+          // Make sure all required fields exist
+          return {
+            ...item,
+            title: item.title || 'Untitled Content',
+            content_summary: item.content_summary || item.summary || item.description || 'No content summary available',
+            source: item.source || 'Unknown Source',
+            category: item.category || 'General'
+          };
+        });
+        
+        console.log('Validated content:', validatedContent);
+        setLatestContent(validatedContent);
+        
+        // Set categories from backend API
+        if (categoriesResponse.data && categoriesResponse.data.length > 0) {
+          setCategories(categoriesResponse.data);
+        } else {
+          // Fallback: extract unique categories from content
+          const uniqueCategories = [...new Set(content.map(item => item.category || 'General'))];
+          setCategories(uniqueCategories);
+        }
         
         setError(null);
       } catch (err) {
@@ -96,8 +130,14 @@ const Home = () => {
   // Fetch personalized recommendations
   useEffect(() => {
     const fetchRecommendations = async () => {
+      // Only fetch recommendations if logged in
+      if (!currentUser) {
+        setRecommendations([]);
+        return;
+      }
+      
       try {
-        const response = await recommendationsApi.getForUser(DEFAULT_USER_ID);
+        const response = await recommendationsApi.getForUser(currentUser.id);
         
         // Extract content items from recommendations
         const recommendedItems = response.data.map(rec => ({
@@ -109,6 +149,7 @@ const Home = () => {
       } catch (err) {
         console.error('Error fetching recommendations:', err);
         // Don't set error state for recommendations - we'll fall back to latest content
+        setRecommendations([]);
       }
     };
     
@@ -116,7 +157,7 @@ const Home = () => {
     if (activeTab === 'for-you') {
       fetchRecommendations();
     }
-  }, [activeTab]);
+  }, [activeTab, currentUser]);
   
   // Get the currently active content list
   const activeContent = activeTab === 'latest' ? filteredContent : recommendations;
@@ -127,8 +168,36 @@ const Home = () => {
   };
   
   // Handle category filter change
-  const handleCategoryChange = (category) => {
+  const handleCategoryChange = async (category) => {
     setSelectedCategory(category);
+    
+    // If a specific category is selected, fetch content for that category
+    if (category !== 'all') {
+      try {
+        setLoading(true);
+        const response = await contentApi.getByCategory(category);
+        setLatestContent(response.data);
+        setError(null);
+      } catch (err) {
+        console.error(`Error fetching content for category ${category}:`, err);
+        setError(`Failed to load content for category ${category}`);
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // If 'all' is selected, refresh with latest content
+      try {
+        setLoading(true);
+        const response = await contentApi.getLatest();
+        setLatestContent(response.data);
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching latest content:', err);
+        setError('Failed to load content');
+      } finally {
+        setLoading(false);
+      }
+    }
   };
 
   return (
@@ -144,12 +213,14 @@ const Home = () => {
           >
             Latest
           </button>
-          <button 
-            className={`tab-button ${activeTab === 'for-you' ? 'active' : ''}`}
-            onClick={() => handleTabChange('for-you')}
-          >
-            For You
-          </button>
+          {currentUser && (
+            <button 
+              className={`tab-button ${activeTab === 'for-you' ? 'active' : ''}`}
+              onClick={() => handleTabChange('for-you')}
+            >
+              For You
+            </button>
+          )}
         </div>
         
         {activeTab === 'latest' && categories.length > 0 && (
@@ -174,7 +245,7 @@ const Home = () => {
       
       {error && <div className="error">{error}</div>}
       
-      {activeTab === 'latest' && userPreferences?.weights && !loading && !error && (
+      {activeTab === 'latest' && currentUser && userPreferences?.weights && !loading && !error && (
         <div className="preference-info">
           <p>Content is sorted based on your preferences:</p>
           <div className="preference-list">
@@ -191,13 +262,28 @@ const Home = () => {
       )}
       
       <div className="content-list">
-        {activeContent.map((item) => (
-          <ContentCard 
-            key={item._id || (item.title + item.source)} 
-            item={item} 
-            showReason={activeTab === 'for-you'}
-          />
-        ))}
+        {activeContent.map((item) => {
+          // Generate a reliable key for each item
+          const itemKey = 
+            // MongoDB ObjectId in string form
+            (typeof item._id === 'string' && item._id) ||
+            // MongoDB ObjectId in object form
+            (item._id && item._id.$oid) ||
+            // MongoDB ObjectId object with toString()
+            (item._id && typeof item._id.toString === 'function' && item._id.toString()) ||
+            // Fallback to title+source
+            (item.title && item.source && `${item.title}-${item.source}`) ||
+            // Last resort - generate a random key
+            `item-${Math.random().toString(36).substring(2, 15)}`;
+            
+          return (
+            <ContentCard 
+              key={itemKey}
+              item={item} 
+              showReason={activeTab === 'for-you'}
+            />
+          );
+        })}
       </div>
       
       {activeContent.length === 0 && !loading && !error && (

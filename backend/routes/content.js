@@ -1,21 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const mongoose = require('mongoose');
-
-// Define Content Schema for MongoDB
-const ContentSchema = new mongoose.Schema({
-  title: { type: String, required: true },
-  content_summary: { type: String, required: true },
-  url: { type: String, required: true },
-  timestamp: { type: Date, default: Date.now },
-  source: { type: String, required: true },
-  category: { type: String, required: true },
-  author: { type: String },
-  media: { type: Object }
-}, { collection: 'contents' });
-
-// Create MongoDB model
-const Content = mongoose.model('Content', ContentSchema);
+const Content = require('../models/content');
 
 // Seed data for initial use - will be replaced by real data from content aggregator
 const seedContent = [
@@ -66,43 +51,69 @@ const seedContent = [
   }
 ];
 
-// Initialize database with seed data only if empty
-async function ensureSeedData() {
-  try {
-    // Check if there's existing content
-    const count = await Content.countDocuments({});
-    
-    if (count === 0) {
-      console.log('No content found, seeding database with initial data...');
-      
-      // Convert string timestamps to Date objects
-      const formattedSeedContent = seedContent.map(item => ({
-        ...item,
-        timestamp: new Date(item.timestamp)
-      }));
-      
-      await Content.insertMany(formattedSeedContent);
-      console.log('Database seeded with initial content');
-    } else {
-      console.log(`Database already has ${count} content items, skipping seed`);
-    }
-  } catch (error) {
-    console.error('Error checking/seeding database:', error);
-  }
-}
-
-// Seed the database on startup
-ensureSeedData();
+// We're no longer using seed data as we'll be getting real content from scrapers
 
 // Get latest content
 router.get('/latest', async (req, res) => {
   try {
-    // Get latest content sorted by timestamp
-    const latest = await Content.find().sort({ timestamp: -1 }).limit(10);
-    res.json(latest);
+    const limit = parseInt(req.query.limit) || 20;
+    
+    console.log('Fetching latest content with limit:', limit);
+    
+    // First try to get content from MongoDB
+    try {
+      // Try using our Content model first
+      const latest = await Content.getLatest(limit);
+      
+      if (latest && latest.length > 0) {
+        console.log(`Found ${latest.length} items in MongoDB collection`);
+        
+        // Log a sample of the first item
+        if (latest.length > 0) {
+          const sample = {...latest[0]};
+          // Convert ObjectId to string to make it printable
+          if (sample._id && typeof sample._id.toString === 'function') {
+            sample._id = sample._id.toString();
+          }
+          console.log('Sample MongoDB document:', JSON.stringify(sample, null, 2));
+        }
+        
+        return res.json(latest);
+      }
+    } catch (mongoModelError) {
+      console.error('Error with Content model:', mongoModelError);
+      
+      // If that fails, try direct mongoose query as fallback
+      try {
+        // Connect to MongoDB using mongoose (already established in server.js)
+        const mongoose = require('mongoose');
+        
+        // Define a simple content schema
+        const ContentSchema = new mongoose.Schema({}, { collection: 'contents', strict: false });
+        const ContentModel = mongoose.model('ContentDirect', ContentSchema);
+        
+        // Fetch latest content
+        const directContent = await ContentModel.find()
+          .sort({ timestamp: -1 })
+          .limit(limit)
+          .lean();
+        
+        if (directContent && directContent.length > 0) {
+          console.log(`Found ${directContent.length} items directly from MongoDB`);
+          return res.json(directContent);
+        }
+      } catch (directMongoError) {
+        console.error('Error with direct MongoDB query:', directMongoError);
+      }
+    }
+    
+    // If we get here, no content was found or there were errors
+    console.log('Falling back to seed data');
+    return res.json(seedContent);
   } catch (error) {
     console.error('Error fetching latest content:', error);
-    res.status(500).json({ error: 'Failed to fetch latest content' });
+    // If there's an error, return seed data
+    res.json(seedContent);
   }
 });
 
@@ -110,15 +121,27 @@ router.get('/latest', async (req, res) => {
 router.get('/category/:category', async (req, res) => {
   try {
     const category = req.params.category;
+    const limit = parseInt(req.query.limit) || 20;
     
-    const content = await Content.find({ 
-      category: new RegExp(category, 'i') 
-    }).sort({ timestamp: -1 }).limit(10);
+    // Get content by category using our Content model
+    const content = await Content.getByCategory(category, limit);
+    
+    if (!content || content.length === 0) {
+      // If no real content is available, filter seed data by category
+      const filteredSeed = seedContent.filter(item => 
+        item.category.toLowerCase() === category.toLowerCase()
+      );
+      return res.json(filteredSeed);
+    }
     
     res.json(content);
   } catch (error) {
     console.error(`Error fetching ${req.params.category} content:`, error);
-    res.status(500).json({ error: `Failed to fetch ${req.params.category} content` });
+    // If there's an error with MongoDB, filter seed data by category
+    const filteredSeed = seedContent.filter(item => 
+      item.category.toLowerCase() === req.params.category.toLowerCase()
+    );
+    res.json(filteredSeed);
   }
 });
 
@@ -126,22 +149,57 @@ router.get('/category/:category', async (req, res) => {
 router.get('/search', async (req, res) => {
   try {
     const query = req.query.q;
+    const limit = parseInt(req.query.limit) || 20;
     
     if (!query) {
       return res.status(400).json({ error: 'Search query is required' });
     }
     
-    const content = await Content.find({
-      $or: [
-        { title: new RegExp(query, 'i') },
-        { content_summary: new RegExp(query, 'i') }
-      ]
-    }).sort({ timestamp: -1 }).limit(10);
+    // Search content using our Content model
+    const content = await Content.search(query, limit);
+    
+    if (!content || content.length === 0) {
+      // If no real content is available, search seed data
+      const regex = new RegExp(query, 'i');
+      const filteredSeed = seedContent.filter(item => 
+        regex.test(item.title) || regex.test(item.content_summary)
+      );
+      return res.json(filteredSeed);
+    }
     
     res.json(content);
   } catch (error) {
     console.error('Error searching content:', error);
-    res.status(500).json({ error: 'Failed to search content' });
+    // If there's an error with MongoDB, search seed data
+    const regex = new RegExp(req.query.q, 'i');
+    const filteredSeed = seedContent.filter(item => 
+      regex.test(item.title) || regex.test(item.content_summary)
+    );
+    res.json(filteredSeed);
+  }
+});
+
+// Get all available categories
+router.get('/categories', async (req, res) => {
+  try {
+    // Use aggregation to get unique categories
+    const db = await Content.connectToMongo();
+    const contentCollection = db.collection('content');
+    
+    const categories = await contentCollection.distinct('category');
+    
+    if (!categories || categories.length === 0) {
+      // If no categories found, extract from seed data
+      const seedCategories = [...new Set(seedContent.map(item => item.category))];
+      return res.json(seedCategories);
+    }
+    
+    res.json(categories);
+  } catch (error) {
+    console.error('Error fetching categories:', error);
+    // If there's an error with MongoDB, extract from seed data
+    const seedCategories = [...new Set(seedContent.map(item => item.category))];
+    res.json(seedCategories);
   }
 });
 

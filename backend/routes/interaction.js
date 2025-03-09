@@ -3,6 +3,14 @@ const router = express.Router();
 const { Pool } = require('pg');
 const Content = require('../models/content');
 
+// Auth middleware - check if user is authenticated
+const isAuthenticated = (req, res, next) => {
+  if (req.isAuthenticated()) {
+    return next();
+  }
+  res.status(401).json({ error: 'User not authenticated' });
+};
+
 // Connect to PostgreSQL
 const pool = new Pool({ connectionString: process.env.PG_URI });
 
@@ -10,15 +18,16 @@ const pool = new Pool({ connectionString: process.env.PG_URI });
  * Track user interactions with content
  * This helps build a more personalized recommendation profile
  */
-router.post('/track', async (req, res) => {
+router.post('/track', isAuthenticated, async (req, res) => {
   try {
-    const { userId, contentId, interactionType, rating } = req.body;
+    const userId = req.user.id; // Get user ID from authenticated user
+    const { contentId, interactionType, rating } = req.body;
     
     // Validate request
-    if (!userId || !contentId || !interactionType) {
+    if (!contentId || !interactionType) {
       return res.status(400).json({ 
         error: 'Missing required fields',
-        required: ['userId', 'contentId', 'interactionType'] 
+        required: ['contentId', 'interactionType'] 
       });
     }
     
@@ -78,7 +87,7 @@ router.post('/track', async (req, res) => {
  * Get user interaction history
  * Useful for debugging and user transparency
  */
-router.get('/:userId', async (req, res) => {
+router.get('/:userId', isAuthenticated, async (req, res) => {
   try {
     const { userId } = req.params;
     
@@ -106,7 +115,7 @@ router.get('/:userId', async (req, res) => {
  * Clear user's interaction history
  * Important for privacy controls
  */
-router.delete('/:userId', async (req, res) => {
+router.delete('/:userId', isAuthenticated, async (req, res) => {
   try {
     const { userId } = req.params;
     
@@ -180,12 +189,13 @@ router.get('/ratings/:contentId', async (req, res) => {
  * Get user's current rating for a specific content item
  * Used to show the user's selected thumbs up/down in UI
  */
-router.get('/user-rating/:userId/:contentId', async (req, res) => {
+router.get('/user-rating/:contentId', isAuthenticated, async (req, res) => {
   try {
-    const { userId, contentId } = req.params;
+    const userId = req.user.id; // Get user ID from authenticated user
+    const { contentId } = req.params;
     
-    if (!userId || !contentId) {
-      return res.status(400).json({ error: 'User ID and Content ID are required' });
+    if (!contentId) {
+      return res.status(400).json({ error: 'Content ID is required' });
     }
     
     // Get from PostgreSQL

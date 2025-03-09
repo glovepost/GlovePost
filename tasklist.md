@@ -27,18 +27,80 @@
   - [ ] Add support for image content analysis and extraction
   - [ ] Create a scheduler for periodic content updates
 - **New Tasks (4chan and Reddit Integration):**
-  - [ ] Implement web scraping for 4chan content
-    - [ ] Use `requests` and `beautifulsoup4` to scrape threads from public 4chan boards (e.g., /g/, /news/)
-    - [ ] Parse posts for `title` (thread subject), `content_summary` (post text), `url` (thread link), `timestamp`
-    - [ ] Handle anonymous posting by assigning a generic source (e.g., "4chan")
-  - [ ] Implement web scraping for Reddit content
-    - [ ] Use `requests` and `beautifulsoup4` to scrape public subreddits (e.g., r/news, r/technology)
-    - [ ] Parse posts for `title`, `content_summary` (self-text or link description), `url`, `timestamp`
-    - [ ] Avoid Reddit API to keep costs down, relying on scraping within legal bounds
+  - [x] Implement web scraping for 4chan content
+    - [x] Use `requests` and `beautifulsoup4` to scrape threads from public 4chan boards (e.g., /g/, /news/)
+    - [x] Parse posts for `title` (thread subject), `content_summary` (post text), `url` (thread link), `timestamp`
+    - [x] Handle anonymous posting by assigning a generic source (e.g., "4chan")
+  - [x] Implement web scraping for Reddit content
+    - [x] Use `requests` and `beautifulsoup4` to scrape public subreddits (e.g., r/news, r/technology)
+    - [x] Parse posts for `title`, `content_summary` (self-text or link description), `url`, `timestamp`
+    - [x] Avoid Reddit API to keep costs down, relying on scraping within legal bounds
 - **New Tasks (from Research - Search Functionality):**
   - [ ] Set up indexing for efficient searching
     - [ ] Use MongoDB text search or integrate ElasticSearch for advanced search capabilities
     - [ ] Index content fields like `title`, `content_summary`, and `category` for full-text search
+- **New Tasks (Script Improvements - `content_aggregator.py`):**
+  - [ ] Implement real X/Twitter scraping in `fetch_x_posts`
+    - [ ] Replace mock data with `beautifulsoup4` scraping using Nitter instances
+    - [ ] Add retry logic with fallback to mock data if scraping fails
+  - [ ] Implement real Facebook scraping in `fetch_facebook_posts`
+    - [ ] Replace mock data with `beautifulsoup4` scraping via `mbasic.facebook.com`
+    - [ ] Handle rate limits with proxy rotation or mock fallback
+  - [ ] Enhance `categorize_content` with NLP
+    - [ ] Replace keyword matching with NLP models (e.g., spaCy, NLTK) for context-aware categorization
+    - [ ] Train on sample data from all sources
+  - [ ] Parallelize content fetching in `store_content`
+    - [ ] Use `concurrent.futures` or `asyncio` for simultaneous source fetching
+    - [ ] Implement rate limiting to avoid server overload
+  - [ ] Validate and normalize content in `clean_content`
+    - [ ] Add URL validation (e.g., `urlparse`), timestamp consistency, and required field checks
+    - [ ] Normalize text (e.g., remove extra whitespace, standardize encoding)
+  - [ ] Handle external scraper failures robustly
+    - [ ] Validate JSON output from `reddit_scraper.py` and `4chan_scraper.py`
+    - [ ] Add timeout and retry logic for subprocess calls
+  - [ ] Improve mock data realism
+    - [ ] Generate dynamic mock data with source-specific patterns (e.g., Reddit upvotes, 4chan style)
+- **New Tasks (Script Improvements - `4chan_scraper.py`):**
+  - [x] Include reply content in `parse_thread_page`
+    - [x] Aggregate replies to enrich `content_summary` (e.g., top 3 replies by length)
+    - [x] Update cleaning logic to handle reply-specific formatting (e.g., quotes)
+  - [x] Enhance timestamp parsing in `extract_timestamp`
+    - [x] Support multiple 4chan timestamp formats (e.g., with/without day)
+    - [x] Log unparseable timestamps for manual review
+  - [ ] Implement global rate limiting in `fetch_4chan_content`
+    - [ ] Add a rate limiter (e.g., `ratelimit` library) to cap requests per minute
+    - [ ] Support proxy rotation for large-scale scraping
+  - [ ] Use dynamic categorization in `get_category_from_board`
+    - [ ] Analyze thread content with NLP instead of static `CATEGORIES_MAPPING`
+    - [ ] Combine board and content analysis for hybrid categorization
+  - [ ] Parallelize thread detail fetching in `fetch_threads_from_board`
+    - [ ] Use `concurrent.futures` to fetch thread details concurrently
+    - [ ] Maintain randomized delays to avoid detection
+  - [ ] Validate content quality in `fetch_4chan_content`
+    - [ ] Ensure `content_summary` meets minimum length post-cleaning (e.g., 50 chars)
+    - [ ] Flag low-quality items for review
+- **New Tasks (Script Improvements - `reddit_scraper.py`):**
+  - [x] Improve timestamp accuracy in `parse_reddit_posts`
+    - [x] Correct `time_attr` parsing to use ISO format instead of Unix assumption
+    - [x] Enhance `estimate_unix_timestamp` with better unit precision (e.g., fetch exact post date)
+  - [x] Enrich content with comments and link descriptions in `fetch_post_detail`
+    - [x] Fetch top 3 comments for discussion posts
+    - [x] Scrape link descriptions for non-self posts using URL content
+  - [ ] Implement global rate limiting in `fetch_reddit_content`
+    - [ ] Use `ratelimit` library to cap requests per minute
+    - [ ] Add proxy rotation support for high-volume scraping
+  - [ ] Use dynamic categorization in `get_category_from_subreddit`
+    - [ ] Analyze post content with NLP instead of static `CATEGORIES_MAPPING`
+    - [ ] Combine subreddit and content for hybrid categorization
+  - [ ] Parallelize post detail fetching in `fetch_posts_from_subreddit`
+    - [ ] Use `concurrent.futures` for concurrent detail fetching
+    - [ ] Maintain randomized delays to avoid detection
+  - [ ] Enhance score parsing in `parse_reddit_posts`
+    - [ ] Handle edge cases (e.g., "Vote", thousands separators) for accurate upvotes
+    - [ ] Estimate downvotes based on upvote trends if possible
+  - [ ] Make HTML parsing more resilient in `parse_reddit_posts`
+    - [ ] Use flexible selectors or fallbacks for Reddit layout changes
+    - [ ] Test against `old.reddit.com` updates
 
 ## Recommendation Engine
 - **Completed:**
@@ -68,18 +130,39 @@
   - [ ] Incorporate source reputation (e.g., weight trusted sources higher)
   - [ ] Add content diversity features to avoid recommendation bubbles
     - [ ] Ensure variety by limiting same-category recommendations (e.g., max 3 per category)
-- **New Tasks (from Research):**
-  - [ ] Create a visualization of the recommendation process to enhance transparency
-    - [ ] Display a breakdown of why each article was recommended (e.g., "60% category match, 30% source preference, 10% recency")
-    - [ ] Provide an interactive chart or graph showing how user preferences influence recommendations
-  - [ ] Allow users to exclude certain topics or sources from recommendations
+- **New Tasks (from Research - Twitter Algorithm):**
+  - [ ] Implement machine learning model for recommendations
+    - [ ] Use LightGBM or similar (e.g., XGBoost) for engagement prediction
+    - [ ] Install dependencies (`lightgbm`, `scikit-learn`)
+  - [ ] Define relevant features for the model
+    - [ ] Extract features: content category, source, age, user preferences, interaction history
+    - [ ] Source from MongoDB (content) and PostgreSQL (interactions)
+  - [ ] Collect and preprocess data for training
+    - [ ] Build dataset from interactions, label engagement (e.g., viewed, rated positively)
+    - [ ] Split into training (80%) and validation (20%), handle missing data
+  - [ ] Train and validate the model
+    - [ ] Train using training set, evaluate with precision/recall/F1 on validation set
+    - [ ] Tune hyperparameters if needed
+  - [ ] Integrate model into recommendation engine
+    - [ ] Update `recommendation_engine.py` to use ML model for scoring
+    - [ ] Ensure Node.js compatibility via subprocess
+  - [ ] Implement two-stage recommendation process
+    - [ ] Add candidate generation: filter by category/source preferences
+    - [ ] Rank candidates with ML model
+  - [ ] Provide transparency through feature importance
+    - [ ] Use LightGBM feature importance for explanations (e.g., "60% category match")
+    - [ ] Integrate with UI visualization
 - **New Tasks (from Research - Commenting and Search):**
-  - [ ] Integrate comment analysis into recommendation algorithm
+  - [x] Integrate comment analysis into recommendation algorithm
     - [ ] Extract keywords or sentiment from comments using NLP (e.g., NLTK or spaCy)
-    - [ ] Adjust recommendation scores based on comment activity (e.g., highly discussed articles score higher)
+    - [x] Adjust recommendation scores based on comment activity (e.g., highly discussed articles score higher)
   - [ ] Use search queries to influence recommendations
     - [ ] Log search queries and suggest related articles based on search history
     - [ ] Adjust recommendation scores for frequently searched articles with a decay factor
+- **New Tasks (Script Improvements - `content_aggregator.py`):**
+  - [x] Incorporate social metrics into recommendations
+    - [x] Use Reddit upvotes/downvotes from `fetch_reddit_posts` to influence scores
+    - [x] Store metrics in `clean_content` for recommendation engine use
 
 ## User Management
 - **Completed:**
@@ -87,16 +170,15 @@
   - [x] Create PostgreSQL integration for user data
   - [x] Add user consent tracking for privacy controls
   - [x] Implement API for updating user preferences
-- **Pending:**
-  - [ ] Add user authentication (OAuth 2.0)
-    - [ ] Install `passport` and `passport-google-oauth20`
-    - [ ] Configure Google OAuth in `server.js`
-    - [ ] Secure endpoints with middleware
-  - [ ] Implement user registration and login functionality
-    - [ ] Add `POST /auth/register` and `POST /auth/login` endpoints
-    - [ ] Store hashed passwords in PostgreSQL (using `bcrypt`)
-  - [ ] Create user profile pages
-    - [ ] Add API endpoint `GET /user/profile/:id`
+  - [x] Add user authentication (OAuth 2.0)
+    - [x] Install `passport` and `passport-google-oauth20`
+    - [x] Configure Google OAuth in `server.js`
+    - [x] Secure endpoints with middleware
+    - [x] Implement user registration and login functionality
+    - [x] Add `POST /auth/register` and `POST /auth/login` endpoints
+    - [x] Store hashed passwords in PostgreSQL (using `bcrypt`)
+  - [x] Create user profile pages
+    - [x] Add API endpoint `GET /user/profile/:id`
 - **New Tasks (from Research):**
   - [ ] Allow users to influence and tweak the recommendation algorithm
     - [ ] Expose algorithm parameters in the user settings (e.g., weight sliders for different factors)
@@ -121,6 +203,14 @@
   - [ ] Implement commenting system
     - [ ] Create PostgreSQL table for comments (`comment_id`, `user_id`, `article_id`, `comment_text`, `timestamp`)
     - [ ] Implement API endpoints: `POST /comments`, `GET /comments/article/:id`
+- **New Tasks (Script Improvements - `content_aggregator.py`):**
+  - [ ] Track fetch metadata
+    - [ ] Add `fetched_at` field to items in `clean_content` for freshness analytics
+    - [ ] Store fetch timestamps in PostgreSQL for aggregation stats
+- **New Tasks (from Research - Twitter Algorithm):**
+  - [ ] Enhance data collection for model training
+    - [ ] Log additional interaction data (e.g., time spent on article)
+    - [ ] Ensure GDPR compliance with user consent
 
 ## Frontend
 - **Completed:**
@@ -180,6 +270,10 @@
   - [ ] Provide clear labels and instructions for forms
     - [ ] Add `aria-label` and `aria-describedby` to forms (search, comments)
     - [ ] Include inline help text for complex inputs
+- **New Tasks (from Research - Twitter Algorithm):**
+  - [ ] Create a visualization of the recommendation process
+    - [ ] Display breakdown (e.g., "60% category match") in `ContentCard`
+    - [ ] Add interactive chart in `Settings.js` showing feature influence
 
 ## Infrastructure
 - **Completed:**
@@ -210,35 +304,49 @@
   - [ ] Set up custom events for key user actions
     - [ ] Track "Article Viewed," "Comment Posted," "Search Performed" events
     - [ ] Store aggregated analytics in a separate database for reporting
+- **New Tasks (Script Improvements - `content_aggregator.py`):**
+  - [ ] Add configuration file support
+    - [ ] Support JSON/YAML config file to override args (e.g., sources, limits)
+    - [ ] Load defaults from `.env` or config if args unspecified
+  - [ ] Implement robust error recovery
+    - [ ] Add retry with exponential backoff for failed fetches/database writes
+    - [ ] Store failed items in a queue for later retry
+  - [ ] Optimize logging
+    - [ ] Add log rotation with `RotatingFileHandler` to manage log size
+    - [ ] Include content-specific logs (e.g., item titles) for debugging
+- **New Tasks (Script Improvements - `4chan_scraper.py`):**
+  - [ ] Make log file path configurable
+    - [ ] Use an env variable or arg (e.g., `--log-dir`) for log directory
+    - [ ] Ensure compatibility with `content_aggregator.py` subprocess calls
+- **New Tasks (from Research - Twitter Algorithm):**
+  - [ ] Ensure scalability for model training
+    - [ ] Set up batch training (e.g., daily) on AWS SageMaker
+    - [ ] Cache model outputs for quick retrieval
 
 ## Next Steps Priority
-1. **Implement User Authentication (OAuth 2.0)**
+1. ✅ **Implement User Authentication (OAuth 2.0)** (COMPLETED)
    - Essential for personalization and security, supports proper user identification
    - High priority as it affects multiple features (comments, profiles) and user experience
-   - Will enable proper user profile management and secure data access
-
-2. **Add Dark Mode Theme**
+   - Enabled proper user profile management and secure data access
+2. ✅ **Enhance Recommendation Engine to Use Rating Data** (COMPLETED)
+   - Integrated thumbs up/down feedback into the recommendation algorithm
+   - Created feedback loops where user ratings influence content recommendations
+   - Implemented weighting of content based on community ratings
+3. **Add Dark Mode Theme**
    - Improve accessibility and user experience, especially for nighttime reading
    - Relatively quick win with high user satisfaction impact
-   - Will complete the core UI improvement tasks we started
-
-3. **Implement the Glove-on-Post Visual Metaphor**
+   - Will complete the core UI improvement tasks
+4. **Implement the Glove-on-Post Visual Metaphor**
    - Create a distinct visual identity for the application
    - Design and implement custom SVG icons for the metaphor
    - Style ContentCard components to match the metaphor
-
-4. **Create Detailed Article View Page**
-   - Add a dedicated page for viewing full article details
-   - Improve user experience for content consumption
-   - Enable more detailed interaction with content
-
-5. **Set Up Automated Testing**
-   - Ensures code quality and prevents regressions
-   - Will be especially important before tackling larger features
+5. **Implement Machine Learning Model for Recommendations**
+   - Transition to LightGBM-based system inspired by Twitter’s algorithm
+   - Define features, train model, and integrate for personalized recommendations
 
 ## Additional Notes
-- **Research Integration:** New tasks enhance GlovePost's core concepts: aggregating diverse sources (now including 4chan and Reddit), filtering out noise, personalizing recommendations with comments and search data, and embedding the glove-on-post metaphor.
-- **Scraping Compliance:** Web scraping for X/Twitter, Facebook, 4chan, and Reddit must comply with their terms of service and robots.txt files. Fallbacks (e.g., Nitter, mbasic.facebook.com) improve reliability.
-- **User Empowerment:** Thumbs up/down, commenting, search, and parameter tweaking provide robust tools for user control and engagement.
-- **Thematic Design:** The glove-on-post metaphor remains central, with potential to tie thumbs up/down and comments into the UI (e.g., "raising" good content, "lowering" bad content, "sharing found gloves").
-- **Accessibility and Analytics:** New tasks ensure inclusivity and data-driven improvements, aligning with best practices for aggregation websites.
+- **Research Integration:** Enhanced recommendation engine with Twitter’s ML approach (LightGBM, two-stage process), adding scalability and transparency tasks.
+- **Scraping Compliance:** Web scraping for X, Facebook, 4chan, and Reddit must comply with terms of service and robots.txt. Fallbacks (e.g., Nitter) improve reliability.
+- **User Empowerment:** ML model transparency, thumbs up/down, commenting, and search empower users to control their experience.
+- **Thematic Design:** Glove-on-post metaphor ties into UI and recommendation explanations (e.g., "raising" content via ML scores).
+- **Accessibility and Analytics:** Tasks ensure inclusivity and data-driven improvements, aligning with best practices.

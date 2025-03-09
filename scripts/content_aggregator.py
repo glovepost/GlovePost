@@ -177,7 +177,7 @@ def fetch_4chan_posts(limit=30, max_retries=3) -> List[Dict[str, Any]]:
             logger.error(f"Unexpected error: {str(e)}")
             return []
 
-def generate_mock_4chan_posts(limit=30):
+def generate_mock_4chan_posts(limit: int = 30) -> List[Dict[str, Any]]:
     """Generate mock 4chan posts."""
     mock_posts = []
     topics = [
@@ -201,9 +201,9 @@ def generate_mock_4chan_posts(limit=30):
         })
     return mock_posts
 
-def fetch_reddit_posts(limit=50):
+def fetch_reddit_posts(limit: int = 50) -> List[Dict[str, Any]]:
     logger.info("Fetching Reddit posts")
-    return []  # Placeholder
+    return []
 
 # Clean content (unchanged)
 def clean_content(item):

@@ -1,21 +1,29 @@
 # GlovePost Development Guidelines
 
 ## Build & Test Commands
-- Start development server: `npm run dev`
-- Build for production: `npm run build` 
-- Run all tests: `npm test`
-- Run single test: `npm test -- -t "test name"`
-- Lint code: `npm run lint`
-- Format code: `npm run format`
+### Frontend (React)
+- Start frontend: `cd frontend/glovepost-ui && npm start`
+- Build frontend: `cd frontend/glovepost-ui && npm run build`
+- Test frontend: `cd frontend/glovepost-ui && npm test`
+- Test single component: `cd frontend/glovepost-ui && npm test -- -t "test name"`
+
+### Backend (Node.js)
+- Start backend: `cd backend && npm run start`
+- Dev backend: `cd backend && npm run dev`
+- Test backend: `cd backend && npm test`
+
+### Python Scripts
+- Run content refresh: `cd scripts && ./refresh_content.sh`
+- Run specific scrapers: `cd scripts && ./refresh_content.sh --scrapers=reddit,twitter`
+- Run recommendations: `cd scripts && python scripts/recommendation_engine.py`
 
 ## Code Style Guidelines
-- **Stack**: React.js (front-end), Node.js (API), Python (recommendation engine)
-- **Formatting**: Use Prettier with 2-space indentation
-- **Naming**: camelCase for variables/functions, PascalCase for components/classes
-- **Imports**: Group imports (React, third-party, local) with blank line between groups
-- **Components**: Create modular components in separate files, use functional components with hooks
-- **Error Handling**: Try/catch for async operations, proper error propagation to UI
-- **Types**: Use TypeScript with explicit types, avoid `any` unless necessary
-- **API Calls**: Use async/await pattern with proper loading/error states
-- **CSS**: Use CSS modules or styled-components for component styling
-- **Testing**: Write unit tests for core logic using Jest/React Testing Library
+- **Formatting**: 2-space indentation, Prettier for JS/TS, Black for Python
+- **Naming**: camelCase (variables/functions), PascalCase (components/classes)
+- **Imports**: Group imports (React, third-party, local) with blank lines
+- **Components**: Functional components with hooks, modular file structure
+- **Error Handling**: Try/catch for async ops, proper error propagation
+- **Types**: Explicit TypeScript, avoid `any`
+- **API Calls**: Async/await with proper loading/error states
+- **CSS**: CSS modules for component styling
+- **Testing**: Jest with React Testing Library for frontend, Jest for backend
