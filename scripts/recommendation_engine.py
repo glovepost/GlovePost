@@ -163,13 +163,22 @@ if MONGODB_AVAILABLE:
         collections = db.list_collection_names()
         logger.info(f"Available collections: {collections}")
         
-        # Use collection named 'contents' to match what we defined in the Node.js model
-        content_collection = db['contents']
+        # Use the correct collection name - check if 'content' exists, otherwise try 'contents'
+        if 'content' in collections:
+            content_collection = db['content']
+        elif 'contents' in collections:
+            content_collection = db['contents']
+            logger.info("Using 'contents' collection instead of 'content'")
+        else:
+            # Default to 'content' if neither exists
+            content_collection = db['content']
+            logger.warning("Neither 'content' nor 'contents' collection found")
+            
         user_interactions_collection = db['user_interactions']
         
         # Count documents to verify collection access
         content_count = content_collection.count_documents({})
-        logger.info(f"Found {content_count} documents in contents collection")
+        logger.info(f"Found {content_count} documents in content collection")
         
         interaction_count = user_interactions_collection.count_documents({})
         logger.info(f"Found {interaction_count} documents in user_interactions collection")
@@ -283,66 +292,131 @@ def get_user_interests(user_id):
         return {}
 
 def get_content_ratings():
-    """Fetch rating information for all content from MongoDB"""
+    """Fetch rating information and social metrics for all content from MongoDB"""
     try:
         if not MONGODB_AVAILABLE:
             logger.warning("MongoDB not available for ratings, using mock data")
-            # Create mock ratings for mock content
+            # Create mock ratings for mock content with additional social metrics
             return {
                 content['_id']: {
                     'upvotes': random.randint(0, 20),
-                    'downvotes': random.randint(0, 10)
+                    'downvotes': random.randint(0, 10),
+                    'comment_count': random.randint(0, 15),
+                    'confidence_score': random.randint(50, 95),
+                    'engagement_score': random.randint(20, 200)
                 }
                 for content in mock_content
             }
         
-        # Get all content with ratings from MongoDB
+        # Get all content with ratings and social metrics from MongoDB
         contents_with_ratings = list(content_collection.find(
             {}, 
-            {'_id': 1, 'upvotes': 1, 'downvotes': 1}
+            {
+                '_id': 1, 
+                'upvotes': 1, 
+                'downvotes': 1,
+                'comment_count': 1,     # New field from Reddit
+                'replies_count': 1,     # New field from 4chan
+                'confidence_score': 1,  # Calculated in content_aggregator.py
+                'engagement_score': 1   # Calculated in content_aggregator.py
+            }
         ))
         
         # Convert to dictionary for faster lookup
         ratings = {}
         for content in contents_with_ratings:
             content_id = str(content['_id'])
+            
+            # Get comment count from either reddit or 4chan field
+            comment_count = content.get('comment_count', content.get('replies_count', 0))
+            
             ratings[content_id] = {
                 'upvotes': content.get('upvotes', 0),
-                'downvotes': content.get('downvotes', 0)
+                'downvotes': content.get('downvotes', 0),
+                'comment_count': comment_count,
+                'confidence_score': content.get('confidence_score', 0),
+                'engagement_score': content.get('engagement_score', 0)
             }
             
-        logger.info(f"Fetched ratings for {len(ratings)} content items")
+        logger.info(f"Fetched ratings and social metrics for {len(ratings)} content items")
         return ratings
     except Exception as e:
-        logger.error(f"Error fetching content ratings: {e}")
+        logger.error(f"Error fetching content ratings and social metrics: {e}")
         return {}
 
 def calculate_rating_score(content_id, ratings_data):
-    """Calculate a rating score based on upvotes and downvotes"""
+    """
+    Calculate a comprehensive rating score based on multiple social metrics:
+    - Upvotes/downvotes ratio (sentiment)
+    - Comment count (discussion level)
+    - Engagement score (overall activity)
+    - Confidence score (statistical reliability)
+    """
     # Get rating data for this content
-    content_ratings = ratings_data.get(content_id, {'upvotes': 0, 'downvotes': 0})
+    content_ratings = ratings_data.get(content_id, {
+        'upvotes': 0, 
+        'downvotes': 0,
+        'comment_count': 0,
+        'confidence_score': 0,
+        'engagement_score': 0
+    })
+    
+    # Extract individual metrics
     upvotes = content_ratings.get('upvotes', 0)
     downvotes = content_ratings.get('downvotes', 0)
+    comment_count = content_ratings.get('comment_count', 0)
+    precalculated_confidence = content_ratings.get('confidence_score', 0)
+    engagement_score = content_ratings.get('engagement_score', 0)
     
     total_votes = upvotes + downvotes
     
-    # If no ratings, return neutral score
-    if total_votes == 0:
-        return 0.5
+    # 1. Calculate vote-based score
+    vote_score = 0.5  # Neutral default
+    if total_votes > 0:
+        # Calculate the percentage of positive votes
+        # Add small smoothing factor to avoid extremes with low vote counts
+        positive_ratio = (upvotes + 1) / (total_votes + 2)
+        
+        # Scale by confidence (more votes = more confidence)
+        # This helps prevent content with just 1-2 votes from ranking too high or low
+        vote_confidence = min(1.0, total_votes / 10)  # Reaches full confidence at 10+ votes
+        
+        # Adjust score to favor content with more ratings
+        # This balances between true rating percentage and having more data points
+        vote_score = (positive_ratio * vote_confidence) + (0.5 * (1 - vote_confidence))
     
-    # Calculate the percentage of positive votes
-    # Add small smoothing factor to avoid extremes with low vote counts
-    positive_ratio = (upvotes + 1) / (total_votes + 2)
+    # 2. Calculate engagement component (normalized to 0-1 scale)
+    # If we have a pre-calculated engagement score, use it, otherwise calculate from components
+    if engagement_score > 0:
+        # Normalize the engagement score to 0-1 scale (capped at 500 for very active content)
+        normalized_engagement = min(1.0, engagement_score / 500)
+    else:
+        # Simple calculation based on votes and comments if no pre-calculated score
+        raw_engagement = total_votes + (comment_count * 3)  # Comments weighted higher
+        normalized_engagement = min(1.0, raw_engagement / 100)  # Cap at reasonable value
     
-    # Scale by confidence (more votes = more confidence)
-    # This helps prevent content with just 1-2 votes from ranking too high or low
-    confidence = min(1.0, total_votes / 10)  # Reaches full confidence at 10+ votes
+    # 3. Calculate discussion component based on comment count
+    discussion_score = min(1.0, comment_count / 30)  # 30+ comments = full score
     
-    # Adjust score to favor content with more ratings
-    # This balances between true rating percentage and having more data points
-    adjusted_score = (positive_ratio * confidence) + (0.5 * (1 - confidence))
+    # 4. Use pre-calculated confidence score if available
+    confidence_component = 0
+    if precalculated_confidence > 0:
+        confidence_component = precalculated_confidence / 100  # Normalize to 0-1
     
-    return adjusted_score
+    # Combine components with reasonable weights
+    # 60% vote ratio, 20% engagement, 20% discussion level
+    # Add small boost for confidence if available
+    final_score = (
+        (0.6 * vote_score) + 
+        (0.2 * normalized_engagement) + 
+        (0.2 * discussion_score)
+    )
+    
+    # Add small boost for highly confident scores
+    if confidence_component > 0.7:  # Only boost genuinely confident scores
+        final_score = min(1.0, final_score * 1.1)  # 10% boost, capped at 1.0
+    
+    return final_score
 
 def recommend(user_id, preferences, limit=10, verbose=False):
     """
@@ -360,10 +434,10 @@ def recommend(user_id, preferences, limit=10, verbose=False):
     logger.info(f"Generating recommendations for user {user_id}")
     
     # Get category weights from preferences, default to General if not specified
-    weights = preferences.get('weights', {'General': 50})
+    weights = preferences.get('weights', {'General': 50}) if isinstance(preferences, dict) else {'General': 50}
     
     # Get rating weight from preferences, default to 50%
-    rating_weight = preferences.get('rating_weight', 50) / 100.0
+    rating_weight = preferences.get('rating_weight', 50) / 100.0 if isinstance(preferences, dict) else 0.5
     
     # Get user interaction-based interests
     user_interests = get_user_interests(user_id)
@@ -457,7 +531,13 @@ def recommend(user_id, preferences, limit=10, verbose=False):
         score_components['rating'] = rating_score
         
         # Make content ratings available for explanation
-        content['rating_stats'] = content_ratings.get(content_id, {'upvotes': 0, 'downvotes': 0})
+        content['rating_stats'] = content_ratings.get(content_id, {
+            'upvotes': 0, 
+            'downvotes': 0,
+            'comment_count': 0,
+            'confidence_score': 0,
+            'engagement_score': 0
+        })
         
         # Calculate the final score with weights for each component
         final_score = (
@@ -486,6 +566,8 @@ def recommend(user_id, preferences, limit=10, verbose=False):
         # Get ratings data for explanation
         upvotes = content.get('rating_stats', {}).get('upvotes', 0)
         downvotes = content.get('rating_stats', {}).get('downvotes', 0)
+        comment_count = content.get('rating_stats', {}).get('comment_count', 0)
+        engagement_score = content.get('rating_stats', {}).get('engagement_score', 0)
         total_votes = upvotes + downvotes
         
         # Add category preference reason
@@ -500,7 +582,7 @@ def recommend(user_id, preferences, limit=10, verbose=False):
         if components['keywords'] > 0.2:
             reasons.append("it matches your interests")
             
-        # Add rating-based reason if there are votes
+        # Add rating-based reasons
         if components['rating'] > 0.7 and total_votes >= 3:
             reasons.append(f"it's highly rated ({upvotes} 👍)")
         elif components['rating'] < 0.3 and total_votes >= 3 and rating_weight < 0.3:
@@ -509,6 +591,16 @@ def recommend(user_id, preferences, limit=10, verbose=False):
             reasons.append("it's relevant despite mixed ratings")
         elif total_votes >= 5:
             reasons.append(f"it has {upvotes} upvotes")
+            
+        # Add comment activity reason if substantial
+        if comment_count >= 10:
+            reasons.append(f"it has active discussion ({comment_count} comments)")
+        elif comment_count >= 5:
+            reasons.append("it has some discussion")
+            
+        # Add engagement reason if high
+        if engagement_score > 100 and not any(r for r in reasons if "upvote" in r or "discussion" in r or "rated" in r):
+            reasons.append("it has high community engagement")
         
         # Default reason if none apply
         if not reasons:
@@ -542,6 +634,10 @@ if __name__ == '__main__':
         if args.preferences:
             try:
                 user_preferences = json.loads(args.preferences)
+                # Ensure user_preferences is a dictionary
+                if not isinstance(user_preferences, dict):
+                    logger.warning(f"Preferences JSON is not a dictionary: {type(user_preferences)}")
+                    user_preferences = {"weights": {"General": 50, "Tech": 80, "Sports": 30}}
             except json.JSONDecodeError:
                 logger.warning(f"Invalid preferences JSON: {args.preferences}")
                 user_preferences = {"weights": {"General": 50, "Tech": 80, "Sports": 30}}
@@ -549,8 +645,8 @@ if __name__ == '__main__':
             # Default test preferences
             user_preferences = {"weights": {"General": 50, "Tech": 80, "Sports": 30}}
             
-        # Add rating preferences if not present
-        if "rating_weight" not in user_preferences:
+        # Add rating preferences if not present - only if user_preferences is a dict
+        if isinstance(user_preferences, dict) and "rating_weight" not in user_preferences:
             # By default, give ratings a medium importance (50%)
             user_preferences["rating_weight"] = 50
             
@@ -573,13 +669,22 @@ if __name__ == '__main__':
         # If no recommendations were generated, create mock ones
         if not recommendations:
             logger.warning("No recommendations generated, using mock data")
-            recommendations = [
-                {
-                    "content": mock_content[i],
-                    "reason": f"Recommended based on sample {mock_content[i]['category']} content"
-                }
-                for i in range(min(args.limit, len(mock_content)))
-            ]
+            
+            # Create mock recommendations in a safer way
+            mock_recommendations = []
+            limit_to_use = min(args.limit if isinstance(args.limit, int) else 10, len(mock_content))
+            
+            for i in range(limit_to_use):
+                try:
+                    mock_item = {
+                        "content": mock_content[i],
+                        "reason": f"Recommended based on sample {mock_content[i].get('category', 'General')} content"
+                    }
+                    mock_recommendations.append(mock_item)
+                except Exception as e:
+                    logger.error(f"Error creating mock recommendation at index {i}: {e}")
+            
+            recommendations = mock_recommendations
         
         # Custom JSON encoder to handle datetime objects
         class DateTimeEncoder(json.JSONEncoder):
@@ -593,6 +698,9 @@ if __name__ == '__main__':
         
     except Exception as e:
         logger.error(f"Error generating recommendations: {e}")
+        # Print exception traceback for debugging
+        import traceback
+        logger.error(f"Exception traceback: {traceback.format_exc()}")
         # Output empty array instead of exiting
         print("[]")
         # Don't exit with error code, as it will cause the Node.js process to fail
