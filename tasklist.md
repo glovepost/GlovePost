@@ -229,20 +229,23 @@
   - [x] Add user feedback mechanism for recommendations
     - [x] Add "Like/Dislike" (thumbs up/down) buttons to `ContentCard`
     - [x] Send feedback to interaction endpoint
-- **Pending:**
-  - [ ] Add dark mode theme
-    - [ ] Implement theme toggle in `App.js`
-    - [ ] Define dark mode styles in `index.css`
-  - [ ] Implement more sophisticated UI with glove/post imagery
-    - [ ] Add SVG icons for gloves and posts
-    - [ ] Style `ContentCard` to resemble gloves on posts
+- **Completed:**
+  - [x] Add dark mode theme
+    - [x] Implement theme toggle in `App.js`
+    - [x] Define dark mode styles in `index.css`
+  - [x] Implement more sophisticated UI with glove/post imagery
+    - [x] Add CSS-based icons for gloves and posts
+    - [x] Style `ContentCard` to resemble gloves on posts
+    - [x] Simplify card design by removing redundant elements
+    - [x] Make entire card clickable to improve usability
+  - **Pending:**
   - [ ] Create detailed article view page
     - [ ] Add `Article.js` component
     - [ ] Route to `/article/:url` with full content display
 - **New Tasks (from Research):**
-  - [ ] Design the UI with the glove-on-post metaphor
-    - [ ] Use glove icons to represent articles and posts to represent categories
-    - [ ] Create an animated or interactive element where users can "pick up" gloves (articles) from posts
+  - [x] Design the UI with the glove-on-post metaphor
+    - [x] Use glove icons to represent articles and posts to represent categories
+    - [x] Create visual elements where users can "pick up" gloves (articles) by clicking on them
   - [ ] Implement a "Lost and Found" section for user-saved articles
     - [ ] Allow users to save articles for later, inspired by finding lost gloves
 - **New Tasks (Thumbs Up/Down Mechanism):**
@@ -332,14 +335,14 @@
    - Integrated thumbs up/down feedback into the recommendation algorithm
    - Created feedback loops where user ratings influence content recommendations
    - Implemented weighting of content based on community ratings
-3. **Add Dark Mode Theme**
-   - Improve accessibility and user experience, especially for nighttime reading
-   - Relatively quick win with high user satisfaction impact
-   - Will complete the core UI improvement tasks
-4. **Implement the Glove-on-Post Visual Metaphor**
-   - Create a distinct visual identity for the application
-   - Design and implement custom SVG icons for the metaphor
-   - Style ContentCard components to match the metaphor
+3. ✅ **Add Dark Mode Theme** (COMPLETED)
+   - Improved accessibility and user experience, especially for nighttime reading
+   - Created smooth transition between light and dark modes
+   - Implemented theme persistence using localStorage
+4. ✅ **Implement the Glove-on-Post Visual Metaphor** (COMPLETED)
+   - Created a distinct visual identity for the application
+   - Designed and implemented CSS-based icons for the metaphor
+   - Styled ContentCard components with glove imagery and improved UX
 5. **Implement Machine Learning Model for Recommendations**
    - Transition to LightGBM-based system inspired by Twitter’s algorithm
    - Define features, train model, and integrate for personalized recommendations
