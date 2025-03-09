@@ -55,14 +55,23 @@ export const recommendationsApi = {
 // Interactions API
 export const interactionsApi = {
   // Track user interaction with content
-  trackInteraction: (userId, contentId, interactionType) => 
-    apiClient.post('/interaction/track', { userId, contentId, interactionType }),
+  // rating is optional and only used for 'rating' interaction type
+  trackInteraction: (userId, contentId, interactionType, rating = null) => 
+    apiClient.post('/interaction/track', { 
+      userId, 
+      contentId, 
+      interactionType,
+      ...(rating !== null && { rating })
+    }),
   
   // Get user interaction history
   getHistory: (userId) => apiClient.get(`/interaction/${userId}`),
   
   // Clear user interaction history
   clearHistory: (userId) => apiClient.delete(`/interaction/${userId}`),
+  
+  // Get content ratings (thumbs up/down counts)
+  getRatings: (contentId) => apiClient.get(`/interaction/ratings/${contentId}`),
 };
 
 // Export the default axios instance for direct use

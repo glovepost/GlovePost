@@ -329,8 +329,13 @@ def scrape_mbasic_facebook(page_name, limit=10):
     
     try:
         # Try with verify=False to handle SSL certificate issues
-        response = requests.get(url, headers=headers, timeout=10, verify=False)
+        response = requests.get(url, headers=headers, timeout=10, verify=False, allow_redirects=True)
         
+        # Check for app intent redirects which happen on mobile browsers
+        if 'intent://' in response.url or 'intent://' in response.text:
+            logger.warning(f"Facebook redirected to mobile app intent for {page_name}, falling back to mock data")
+            return generate_mock_facebook_posts(page_name, limit)
+            
         # Check for login walls or redirects
         if 'login' in response.url.lower() or 'You must log in' in response.text:
             logger.warning(f"Login required on mbasic Facebook for {page_name}, falling back to mock data")

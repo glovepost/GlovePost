@@ -26,6 +26,19 @@
   - [ ] Implement tracking of source reliability and content quality over time
   - [ ] Add support for image content analysis and extraction
   - [ ] Create a scheduler for periodic content updates
+- **New Tasks (4chan and Reddit Integration):**
+  - [ ] Implement web scraping for 4chan content
+    - [ ] Use `requests` and `beautifulsoup4` to scrape threads from public 4chan boards (e.g., /g/, /news/)
+    - [ ] Parse posts for `title` (thread subject), `content_summary` (post text), `url` (thread link), `timestamp`
+    - [ ] Handle anonymous posting by assigning a generic source (e.g., "4chan")
+  - [ ] Implement web scraping for Reddit content
+    - [ ] Use `requests` and `beautifulsoup4` to scrape public subreddits (e.g., r/news, r/technology)
+    - [ ] Parse posts for `title`, `content_summary` (self-text or link description), `url`, `timestamp`
+    - [ ] Avoid Reddit API to keep costs down, relying on scraping within legal bounds
+- **New Tasks (from Research - Search Functionality):**
+  - [ ] Set up indexing for efficient searching
+    - [ ] Use MongoDB text search or integrate ElasticSearch for advanced search capabilities
+    - [ ] Index content fields like `title`, `content_summary`, and `category` for full-text search
 
 ## Recommendation Engine
 - **Completed:**
@@ -36,27 +49,37 @@
   - [x] Set up integration between Node.js backend and Python engine
   - [x] Create virtual environment for Python dependencies
   - [x] Add reasoning for recommendations ("Recommended because...")
+  - [x] Enhance recommendation algorithm with more sophisticated scoring
+    - [x] Add time decay factor (recent content scores higher)
+  - [x] Add user interaction history to recommendation calculations
+    - [x] Fetch interactions from PostgreSQL
+  - [x] Implement keyword-based recommendations
+    - [x] Extract keywords from content summaries
+    - [x] Match with user-defined keywords in preferences
+  - [x] Integrate thumbs up/thumbs down feedback into recommendation engine
+    - [x] Update `recommendation_engine.py` to factor in user ratings
+    - [x] Adjust content scores based on aggregated user feedback across all users
+  - [x] Develop a user interface for tweaking recommendation parameters
+    - [x] Add slider for users to adjust rating influence on recommendations
+    - [x] Provide information explaining how the rating weight affects recommendations
+  - [x] Implement a feedback loop where user interactions directly influence future recommendations
+    - [x] Adjust recommendation scores based on user feedback (likes/dislikes)
 - **Pending:**
-  - [ ] Enhance recommendation algorithm with more sophisticated scoring
-    - [ ] Add time decay factor (recent content scores higher)
-    - [ ] Incorporate source reputation (e.g., weight trusted sources higher)
-  - [ ] Add user interaction history to recommendation calculations
-    - [ ] Fetch interactions from PostgreSQL
-    - [ ] Adjust scores based on views/clicks
-  - [ ] Implement keyword-based recommendations
-    - [ ] Extract keywords from content summaries
-    - [ ] Match with user-defined keywords in preferences
+  - [ ] Incorporate source reputation (e.g., weight trusted sources higher)
   - [ ] Add content diversity features to avoid recommendation bubbles
     - [ ] Ensure variety by limiting same-category recommendations (e.g., max 3 per category)
 - **New Tasks (from Research):**
-  - [ ] Develop a user interface for tweaking recommendation parameters
-    - [ ] Add sliders or input fields for users to adjust topic weights, source preferences, and recency importance
-    - [ ] Allow users to exclude certain topics or sources
   - [ ] Create a visualization of the recommendation process to enhance transparency
     - [ ] Display a breakdown of why each article was recommended (e.g., "60% category match, 30% source preference, 10% recency")
     - [ ] Provide an interactive chart or graph showing how user preferences influence recommendations
-  - [ ] Implement a feedback loop where user interactions directly influence future recommendations
-    - [ ] Adjust recommendation scores based on user feedback (e.g., likes, dislikes, "not interested")
+  - [ ] Allow users to exclude certain topics or sources from recommendations
+- **New Tasks (from Research - Commenting and Search):**
+  - [ ] Integrate comment analysis into recommendation algorithm
+    - [ ] Extract keywords or sentiment from comments using NLP (e.g., NLTK or spaCy)
+    - [ ] Adjust recommendation scores based on comment activity (e.g., highly discussed articles score higher)
+  - [ ] Use search queries to influence recommendations
+    - [ ] Log search queries and suggest related articles based on search history
+    - [ ] Adjust recommendation scores for frequently searched articles with a decay factor
 
 ## User Management
 - **Completed:**
@@ -74,13 +97,14 @@
     - [ ] Store hashed passwords in PostgreSQL (using `bcrypt`)
   - [ ] Create user profile pages
     - [ ] Add API endpoint `GET /user/profile/:id`
-  - [ ] Add email notifications for new content
-    - [ ] Install `nodemailer`
-    - [ ] Send emails based on user preferences
 - **New Tasks (from Research):**
   - [ ] Allow users to influence and tweak the recommendation algorithm
     - [ ] Expose algorithm parameters in the user settings (e.g., weight sliders for different factors)
     - [ ] Provide clear documentation or tooltips explaining how each parameter affects recommendations
+- **New Tasks (from Research - Commenting System):**
+  - [ ] Implement comment moderation tools
+    - [ ] Allow admins to delete/flag comments via `GET /admin/comments`
+    - [ ] Implement reporting system (`POST /comments/report`) with admin notifications
 
 ## User Interactions
 - **Completed:**
@@ -88,8 +112,15 @@
   - [x] Implement interaction recording in PostgreSQL
   - [x] Add API endpoints for retrieving user interaction history
   - [x] Support clearing interaction history for privacy
+  - [x] Add thumbs up/thumbs down tracking to user interactions
+    - [x] Extend `interactions` table in PostgreSQL with `rating` column
+    - [x] Update `POST /interactions` endpoint to accept rating data
 - **Pending:**
   - None (fully completed based on status)
+- **New Tasks (from Research - Commenting System):**
+  - [ ] Implement commenting system
+    - [ ] Create PostgreSQL table for comments (`comment_id`, `user_id`, `article_id`, `comment_text`, `timestamp`)
+    - [ ] Implement API endpoints: `POST /comments`, `GET /comments/article/:id`
 
 ## Frontend
 - **Completed:**
@@ -99,31 +130,56 @@
   - [x] Create ContentCard component for displaying articles
   - [x] Connect frontend to backend API endpoints
   - [x] Add basic styling and layout
+  - [x] Improve mobile responsiveness
+    - [x] Add media queries in `index.css`, `App.css`, `Home.css`, and `Settings.css`
+    - [x] Test on multiple device sizes
+  - [x] Add content filtering by category/source in UI
+    - [x] Create filter dropdowns in `Home.js`
+    - [x] Update API calls with query params
+  - [x] Add user feedback mechanism for recommendations
+    - [x] Add "Like/Dislike" (thumbs up/down) buttons to `ContentCard`
+    - [x] Send feedback to interaction endpoint
 - **Pending:**
-  - [ ] Improve mobile responsiveness
-    - [ ] Add media queries in `index.css`
-    - [ ] Test on multiple device sizes
   - [ ] Add dark mode theme
     - [ ] Implement theme toggle in `App.js`
     - [ ] Define dark mode styles in `index.css`
   - [ ] Implement more sophisticated UI with glove/post imagery
     - [ ] Add SVG icons for gloves and posts
     - [ ] Style `ContentCard` to resemble gloves on posts
-  - [ ] Add content filtering by category/source in UI
-    - [ ] Create filter dropdowns in `Home.js`
-    - [ ] Update API calls with query params (e.g., `/content/latest?category=tech`)
   - [ ] Create detailed article view page
     - [ ] Add `Article.js` component
     - [ ] Route to `/article/:url` with full content display
-  - [ ] Add user feedback mechanism for recommendations
-    - [ ] Add "Like/Dislike" buttons to `ContentCard`
-    - [ ] Send feedback to new endpoint `POST /feedback`
 - **New Tasks (from Research):**
   - [ ] Design the UI with the glove-on-post metaphor
     - [ ] Use glove icons to represent articles and posts to represent categories
     - [ ] Create an animated or interactive element where users can "pick up" gloves (articles) from posts
   - [ ] Implement a "Lost and Found" section for user-saved articles
     - [ ] Allow users to save articles for later, inspired by finding lost gloves
+- **New Tasks (Thumbs Up/Down Mechanism):**
+  - [x] Add thumbs up/thumbs down buttons to `ContentCard` component
+    - [x] Include icons for thumbs-up/down
+    - [x] Send rating data to `POST /interactions` on click
+  - [x] Display aggregated thumbs up/down counts on each post
+    - [x] Fetch ratings from backend and show totals in UI
+- **New Tasks (from Research - Commenting, Search, Accessibility):**
+  - [ ] Add comment section to `Article.js` component
+    - [ ] Display comments sorted by timestamp with user info
+    - [ ] Add form for posting comments with validation
+  - [ ] Implement search bar in `App.js` or `Home.js`
+    - [ ] Add search input with autocomplete using `react-autosuggest`
+    - [ ] Create `SearchResults.js` component for displaying results with pagination
+  - [ ] Ensure all images have alt text
+    - [ ] Add descriptive alt text to glove/post imagery and other images
+    - [ ] Verify compliance with tools like WAVE or axe
+  - [ ] Check and adjust color contrast for readability
+    - [ ] Ensure WCAG contrast ratios (e.g., 4.5:1) in light and dark modes
+    - [ ] Use `color-contrast` library for checks
+  - [ ] Make site navigable using keyboard only
+    - [ ] Ensure all interactive elements are focusable with `tabindex` and ARIA roles
+    - [ ] Test with screen readers (e.g., NVDA, JAWS)
+  - [ ] Provide clear labels and instructions for forms
+    - [ ] Add `aria-label` and `aria-describedby` to forms (search, comments)
+    - [ ] Include inline help text for complex inputs
 
 ## Infrastructure
 - **Completed:**
@@ -147,21 +203,42 @@
     - [ ] Conduct load testing with 1,000 concurrent users
   - [ ] Implement rate limiting for API endpoints
     - [ ] Use `express-rate-limit` to prevent abuse
+- **New Tasks (from Research - Analytics):**
+  - [ ] Integrate Google Analytics or similar tool
+    - [ ] Set up Google Analytics for page views, sessions, and bounce rates
+    - [ ] Configure events for key actions (e.g., article views, searches, comments)
+  - [ ] Set up custom events for key user actions
+    - [ ] Track "Article Viewed," "Comment Posted," "Search Performed" events
+    - [ ] Store aggregated analytics in a separate database for reporting
 
 ## Next Steps Priority
 1. **Implement User Authentication (OAuth 2.0)**
-   - Essential for personalization and security
-2. **Enhance Recommendation Algorithm with Interaction History and Advanced Filtering**
-   - Incorporates user feedback, interaction data, and improved noise reduction
-3. **Add Web Scraping for X/Twitter and Facebook**
-   - Expands content sources without relying on paid APIs
-4. **Improve Frontend UX/UI with Glove-on-Post Imagery and Mobile Responsiveness**
-   - Enhances user engagement with thematic design and better accessibility
+   - Essential for personalization and security, supports proper user identification
+   - High priority as it affects multiple features (comments, profiles) and user experience
+   - Will enable proper user profile management and secure data access
+
+2. **Add Dark Mode Theme**
+   - Improve accessibility and user experience, especially for nighttime reading
+   - Relatively quick win with high user satisfaction impact
+   - Will complete the core UI improvement tasks we started
+
+3. **Implement the Glove-on-Post Visual Metaphor**
+   - Create a distinct visual identity for the application
+   - Design and implement custom SVG icons for the metaphor
+   - Style ContentCard components to match the metaphor
+
+4. **Create Detailed Article View Page**
+   - Add a dedicated page for viewing full article details
+   - Improve user experience for content consumption
+   - Enable more detailed interaction with content
+
 5. **Set Up Automated Testing**
    - Ensures code quality and prevents regressions
+   - Will be especially important before tackling larger features
 
 ## Additional Notes
-- **Research Integration:** New tasks enhance GlovePost’s core concepts: aggregating diverse sources, filtering out noise, personalizing recommendations, and embedding the glove-on-post metaphor into the UI/UX.
-- **Scraping Compliance:** Web scraping for X/Twitter and Facebook must comply with their terms of service and robots.txt files. Alternative open data sources (e.g., public RSS feeds) may be considered if needed.
-- **User Empowerment:** Features like tweaking recommendation parameters and visualizing the recommendation process give users more control and transparency.
-- **Thematic Design:** The glove-on-post metaphor is woven into the frontend tasks to create a unique and engaging user experience.
+- **Research Integration:** New tasks enhance GlovePost's core concepts: aggregating diverse sources (now including 4chan and Reddit), filtering out noise, personalizing recommendations with comments and search data, and embedding the glove-on-post metaphor.
+- **Scraping Compliance:** Web scraping for X/Twitter, Facebook, 4chan, and Reddit must comply with their terms of service and robots.txt files. Fallbacks (e.g., Nitter, mbasic.facebook.com) improve reliability.
+- **User Empowerment:** Thumbs up/down, commenting, search, and parameter tweaking provide robust tools for user control and engagement.
+- **Thematic Design:** The glove-on-post metaphor remains central, with potential to tie thumbs up/down and comments into the UI (e.g., "raising" good content, "lowering" bad content, "sharing found gloves").
+- **Accessibility and Analytics:** New tasks ensure inclusivity and data-driven improvements, aligning with best practices for aggregation websites.

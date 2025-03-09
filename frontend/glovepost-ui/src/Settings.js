@@ -16,7 +16,8 @@ const Settings = () => {
       Health: 50,
       Politics: 50
     },
-    trackingConsent: false
+    trackingConsent: false,
+    rating_weight: 50 // Add rating weight with default 50%
   });
   
   const [interactions, setInteractions] = useState([]);
@@ -66,7 +67,7 @@ const Settings = () => {
     fetchInteractionHistory();
   }, [userId]);
   
-  // Update weight when slider changes
+  // Update weight when category slider changes
   const handleWeightChange = (category, value) => {
     setPreferences(prev => ({
       ...prev,
@@ -74,6 +75,14 @@ const Settings = () => {
         ...prev.weights,
         [category]: parseInt(value)
       }
+    }));
+  };
+  
+  // Update rating weight when slider changes
+  const handleRatingWeightChange = (value) => {
+    setPreferences(prev => ({
+      ...prev,
+      rating_weight: parseInt(value)
     }));
   };
   
@@ -195,6 +204,36 @@ const Settings = () => {
           </div>
         )}
         
+        <h3>Community Ratings Influence</h3>
+        <p>How much weight should community ratings (👍/👎) have in your recommendations?</p>
+        
+        {loadingPrefs ? (
+          <div className="loading-indicator">Loading preferences...</div>
+        ) : (
+          <div className="preference-item rating-weight-slider">
+            <label htmlFor="preference-rating">Rating Weight</label>
+            <div className="slider-container">
+              <input
+                type="range"
+                id="preference-rating"
+                min="0"
+                max="100"
+                value={preferences.rating_weight}
+                onChange={(e) => handleRatingWeightChange(e.target.value)}
+              />
+              <span className="slider-value">{preferences.rating_weight}%</span>
+            </div>
+          </div>
+        )}
+        
+        <div className="settings-explanation">
+          <ul>
+            <li><strong>High value (80-100%):</strong> Heavily favor content that others have rated highly</li>
+            <li><strong>Medium value (40-60%):</strong> Balance personal preferences with community ratings</li>
+            <li><strong>Low value (0-20%):</strong> Mostly rely on your selected categories, with little influence from ratings</li>
+          </ul>
+        </div>
+        
         <div className="settings-actions">
           <button 
             className="save-button" 
@@ -237,6 +276,7 @@ const Settings = () => {
                   <tr>
                     <th>Type</th>
                     <th>Content ID</th>
+                    <th>Rating</th>
                     <th>Time</th>
                   </tr>
                 </thead>
@@ -245,6 +285,11 @@ const Settings = () => {
                     <tr key={interaction.id}>
                       <td>{formatInteractionType(interaction.interaction_type)}</td>
                       <td>{interaction.content_id.substring(0, 8)}...</td>
+                      <td>
+                        {interaction.interaction_type === 'rating' ? (
+                          interaction.rating === 1 ? '👍' : interaction.rating === -1 ? '👎' : ''
+                        ) : ''}
+                      </td>
                       <td>{formatTimestamp(interaction.created_at)}</td>
                     </tr>
                   ))}

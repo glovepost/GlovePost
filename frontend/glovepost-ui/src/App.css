@@ -80,17 +80,61 @@ body {
 /* Responsive */
 @media (max-width: 768px) {
   .navbar {
-    padding: 0 1rem;
+    padding: 15px;
     flex-direction: column;
     height: auto;
-    padding: 15px;
   }
   
   .logo {
     margin-bottom: 15px;
   }
   
+  .nav-links {
+    width: 100%;
+    justify-content: center;
+  }
+  
   .nav-links li {
     margin: 0 15px;
+  }
+  
+  .main-content {
+    padding: 15px 10px;
+  }
+  
+  .footer {
+    padding: 15px;
+  }
+}
+
+/* Small phones */
+@media (max-width: 480px) {
+  .navbar {
+    padding: 10px;
+  }
+  
+  .logo {
+    font-size: 1.5rem;
+    margin-bottom: 10px;
+  }
+  
+  .nav-links li {
+    margin: 0 10px;
+  }
+  
+  .nav-links a {
+    font-size: 0.9rem;
+  }
+  
+  .main-content {
+    padding: 10px 5px;
+  }
+  
+  .footer {
+    padding: 10px;
+  }
+  
+  .footer p {
+    font-size: 0.8rem;
   }
 }

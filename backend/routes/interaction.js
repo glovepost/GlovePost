@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { Pool } = require('pg');
+const Content = require('../models/content');
 
 // Connect to PostgreSQL
 const pool = new Pool({ connectionString: process.env.PG_URI });
@@ -11,7 +12,7 @@ const pool = new Pool({ connectionString: process.env.PG_URI });
  */
 router.post('/track', async (req, res) => {
   try {
-    const { userId, contentId, interactionType } = req.body;
+    const { userId, contentId, interactionType, rating } = req.body;
     
     // Validate request
     if (!userId || !contentId || !interactionType) {
@@ -22,7 +23,7 @@ router.post('/track', async (req, res) => {
     }
     
     // Validate interaction type
-    const validInteractions = ['view', 'click', 'share', 'like', 'bookmark', 'dislike'];
+    const validInteractions = ['view', 'click', 'share', 'like', 'bookmark', 'dislike', 'rating'];
     if (!validInteractions.includes(interactionType)) {
       return res.status(400).json({
         error: 'Invalid interaction type',
@@ -30,11 +31,37 @@ router.post('/track', async (req, res) => {
       });
     }
     
+    // Validate rating if interaction type is 'rating'
+    if (interactionType === 'rating' && (rating === undefined || ![1, -1].includes(rating))) {
+      return res.status(400).json({
+        error: 'Rating must be 1 (thumbs up) or -1 (thumbs down) for rating interaction type',
+        received: rating
+      });
+    }
+    
     // Record the interaction in PostgreSQL
-    await pool.query(
-      'INSERT INTO user_interactions (user_id, content_id, interaction_type) VALUES ($1, $2, $3)',
-      [userId, contentId, interactionType]
-    );
+    if (interactionType === 'rating') {
+      // For rating interactions, include the rating value
+      await pool.query(
+        'INSERT INTO user_interactions (user_id, content_id, interaction_type, rating) VALUES ($1, $2, $3, $4)',
+        [userId, contentId, interactionType, rating]
+      );
+      
+      // Update the content rating counts in MongoDB
+      // This will be handled asynchronously, so we don't wait for it to complete
+      try {
+        await Content.updateRating(contentId, rating);
+      } catch (mongoError) {
+        // Non-critical error, log but don't fail the request
+        console.error('Error updating MongoDB rating counts:', mongoError);
+      }
+    } else {
+      // For non-rating interactions, use the original query
+      await pool.query(
+        'INSERT INTO user_interactions (user_id, content_id, interaction_type) VALUES ($1, $2, $3)',
+        [userId, contentId, interactionType]
+      );
+    }
     
     // Return success
     res.json({ 
@@ -100,6 +127,86 @@ router.delete('/:userId', async (req, res) => {
   } catch (error) {
     console.error('Error clearing interaction history:', error);
     res.status(500).json({ error: 'Failed to clear interaction history' });
+  }
+});
+
+/**
+ * Get ratings for a specific content item
+ * Used to display thumbs up/down counts in UI
+ */
+router.get('/ratings/:contentId', async (req, res) => {
+  try {
+    const { contentId } = req.params;
+    
+    if (!contentId) {
+      return res.status(400).json({ error: 'Content ID is required' });
+    }
+    
+    try {
+      // Get content ratings from MongoDB using our model
+      const ratings = await Content.getRatings(contentId);
+      
+      // Return ratings
+      res.json(ratings);
+    } catch (mongoError) {
+      console.error('Error fetching MongoDB rating counts:', mongoError);
+      
+      // As a fallback, calculate from PostgreSQL
+      const upvotesResult = await pool.query(
+        `SELECT COUNT(*) as count FROM user_interactions 
+         WHERE content_id = $1 AND interaction_type = 'rating' AND rating = 1`,
+        [contentId]
+      );
+      
+      const downvotesResult = await pool.query(
+        `SELECT COUNT(*) as count FROM user_interactions 
+         WHERE content_id = $1 AND interaction_type = 'rating' AND rating = -1`,
+        [contentId]
+      );
+      
+      // Return ratings calculated from PostgreSQL
+      res.json({
+        upvotes: parseInt(upvotesResult.rows[0]?.count || 0),
+        downvotes: parseInt(downvotesResult.rows[0]?.count || 0)
+      });
+    }
+  } catch (error) {
+    console.error('Error fetching content ratings:', error);
+    res.status(500).json({ error: 'Failed to fetch content ratings' });
+  }
+});
+
+/**
+ * Get user's current rating for a specific content item
+ * Used to show the user's selected thumbs up/down in UI
+ */
+router.get('/user-rating/:userId/:contentId', async (req, res) => {
+  try {
+    const { userId, contentId } = req.params;
+    
+    if (!userId || !contentId) {
+      return res.status(400).json({ error: 'User ID and Content ID are required' });
+    }
+    
+    // Get from PostgreSQL
+    const result = await pool.query(
+      `SELECT rating FROM user_interactions 
+       WHERE user_id = $1 AND content_id = $2 AND interaction_type = 'rating'
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [userId, contentId]
+    );
+    
+    if (result.rows.length === 0) {
+      // No rating found
+      return res.json({ rating: null });
+    }
+    
+    // Return the user's current rating
+    res.json({ rating: result.rows[0].rating });
+  } catch (error) {
+    console.error('Error fetching user rating:', error);
+    res.status(500).json({ error: 'Failed to fetch user rating' });
   }
 });
 

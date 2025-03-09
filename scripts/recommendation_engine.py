@@ -6,6 +6,7 @@ import logging
 import argparse
 import re
 import math
+import random
 from collections import Counter
 
 # Optional imports - handle gracefully if not available
@@ -281,6 +282,68 @@ def get_user_interests(user_id):
         logger.error(f"Error getting user interests: {e}")
         return {}
 
+def get_content_ratings():
+    """Fetch rating information for all content from MongoDB"""
+    try:
+        if not MONGODB_AVAILABLE:
+            logger.warning("MongoDB not available for ratings, using mock data")
+            # Create mock ratings for mock content
+            return {
+                content['_id']: {
+                    'upvotes': random.randint(0, 20),
+                    'downvotes': random.randint(0, 10)
+                }
+                for content in mock_content
+            }
+        
+        # Get all content with ratings from MongoDB
+        contents_with_ratings = list(content_collection.find(
+            {}, 
+            {'_id': 1, 'upvotes': 1, 'downvotes': 1}
+        ))
+        
+        # Convert to dictionary for faster lookup
+        ratings = {}
+        for content in contents_with_ratings:
+            content_id = str(content['_id'])
+            ratings[content_id] = {
+                'upvotes': content.get('upvotes', 0),
+                'downvotes': content.get('downvotes', 0)
+            }
+            
+        logger.info(f"Fetched ratings for {len(ratings)} content items")
+        return ratings
+    except Exception as e:
+        logger.error(f"Error fetching content ratings: {e}")
+        return {}
+
+def calculate_rating_score(content_id, ratings_data):
+    """Calculate a rating score based on upvotes and downvotes"""
+    # Get rating data for this content
+    content_ratings = ratings_data.get(content_id, {'upvotes': 0, 'downvotes': 0})
+    upvotes = content_ratings.get('upvotes', 0)
+    downvotes = content_ratings.get('downvotes', 0)
+    
+    total_votes = upvotes + downvotes
+    
+    # If no ratings, return neutral score
+    if total_votes == 0:
+        return 0.5
+    
+    # Calculate the percentage of positive votes
+    # Add small smoothing factor to avoid extremes with low vote counts
+    positive_ratio = (upvotes + 1) / (total_votes + 2)
+    
+    # Scale by confidence (more votes = more confidence)
+    # This helps prevent content with just 1-2 votes from ranking too high or low
+    confidence = min(1.0, total_votes / 10)  # Reaches full confidence at 10+ votes
+    
+    # Adjust score to favor content with more ratings
+    # This balances between true rating percentage and having more data points
+    adjusted_score = (positive_ratio * confidence) + (0.5 * (1 - confidence))
+    
+    return adjusted_score
+
 def recommend(user_id, preferences, limit=10, verbose=False):
     """
     Generate recommendations for a user based on their preferences.
@@ -299,6 +362,9 @@ def recommend(user_id, preferences, limit=10, verbose=False):
     # Get category weights from preferences, default to General if not specified
     weights = preferences.get('weights', {'General': 50})
     
+    # Get rating weight from preferences, default to 50%
+    rating_weight = preferences.get('rating_weight', 50) / 100.0
+    
     # Get user interaction-based interests
     user_interests = get_user_interests(user_id)
     
@@ -309,6 +375,9 @@ def recommend(user_id, preferences, limit=10, verbose=False):
     
     # Keywords from user interests
     interest_keywords = user_interests.get('keywords', {})
+    
+    # Get content ratings
+    content_ratings = get_content_ratings()
     
     # Get content from MongoDB
     try:
@@ -383,11 +452,21 @@ def recommend(user_id, preferences, limit=10, verbose=False):
                 
         score_components['keywords'] = keyword_score
         
+        # 4. Rating score based on community feedback
+        rating_score = calculate_rating_score(content_id, content_ratings)
+        score_components['rating'] = rating_score
+        
+        # Make content ratings available for explanation
+        content['rating_stats'] = content_ratings.get(content_id, {'upvotes': 0, 'downvotes': 0})
+        
         # Calculate the final score with weights for each component
         final_score = (
-            0.5 * category_score +  # Category match is important
-            0.3 * freshness_score +  # Freshness matters
-            0.2 * keyword_score      # Keyword match for fine-tuning
+            (1 - rating_weight) * (
+                0.5 * category_score +  # Category match is important
+                0.3 * freshness_score +  # Freshness matters
+                0.2 * keyword_score      # Keyword match for fine-tuning
+            ) + 
+            (rating_weight * rating_score)  # Community rating component
         )
         
         # Store the item with its score
@@ -403,12 +482,33 @@ def recommend(user_id, preferences, limit=10, verbose=False):
         
         # Create reason text
         reasons = []
+        
+        # Get ratings data for explanation
+        upvotes = content.get('rating_stats', {}).get('upvotes', 0)
+        downvotes = content.get('rating_stats', {}).get('downvotes', 0)
+        total_votes = upvotes + downvotes
+        
+        # Add category preference reason
         if components['category'] > 0.3:
             reasons.append(f"your {category} preference")
+            
+        # Add recency reason
         if components['freshness'] > 0.7:
             reasons.append("it's recent")
+            
+        # Add keyword matching reason
         if components['keywords'] > 0.2:
             reasons.append("it matches your interests")
+            
+        # Add rating-based reason if there are votes
+        if components['rating'] > 0.7 and total_votes >= 3:
+            reasons.append(f"it's highly rated ({upvotes} 👍)")
+        elif components['rating'] < 0.3 and total_votes >= 3 and rating_weight < 0.3:
+            # Only add low rating as reason if rating weight is low
+            # (otherwise we wouldn't recommend low-rated content at all)
+            reasons.append("it's relevant despite mixed ratings")
+        elif total_votes >= 5:
+            reasons.append(f"it has {upvotes} upvotes")
         
         # Default reason if none apply
         if not reasons:
@@ -448,6 +548,11 @@ if __name__ == '__main__':
         else:
             # Default test preferences
             user_preferences = {"weights": {"General": 50, "Tech": 80, "Sports": 30}}
+            
+        # Add rating preferences if not present
+        if "rating_weight" not in user_preferences:
+            # By default, give ratings a medium importance (50%)
+            user_preferences["rating_weight"] = 50
             
         # Get user ID
         user_id = args.user if args.user else "test_user"
