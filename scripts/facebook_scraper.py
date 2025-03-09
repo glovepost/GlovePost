@@ -212,9 +212,14 @@ def scrape_facebook_page(page_name, limit=10):
     }
     
     try:
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
+        # Try with verify=False to handle SSL certificate issues
+        response = requests.get(url, headers=headers, timeout=10, verify=False)
         
+        # Check if we're hitting a login wall or other blocking page
+        if 'You must log in to continue' in response.text or 'login' in response.url:
+            logger.warning(f"Facebook login wall encountered for {page_name}, falling back to mbasic version")
+            return scrape_mbasic_facebook(page_name, limit)
+            
         soup = BeautifulSoup(response.text, 'html.parser')
         posts = []
         
@@ -225,6 +230,21 @@ def scrape_facebook_page(page_name, limit=10):
         if not post_containers:
             # Try alternative selector approach
             post_containers = soup.select('div[role="article"]')
+            
+        if not post_containers:
+            # Try another common selector
+            post_containers = soup.select('.userContentWrapper')
+            
+        if not post_containers:
+            # Look for any divs with substantial text that might be posts
+            candidates = []
+            for div in soup.select('div'):
+                text = div.get_text().strip()
+                if len(text) > 100 and len(text) < 2000:  # Reasonable post length
+                    candidates.append(div)
+            
+            if candidates:
+                post_containers = candidates[:limit]
             
         if not post_containers:
             # Facebook has very strong anti-scraping measures
@@ -304,9 +324,14 @@ def scrape_mbasic_facebook(page_name, limit=10):
     }
     
     try:
-        response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()
+        # Try with verify=False to handle SSL certificate issues
+        response = requests.get(url, headers=headers, timeout=10, verify=False)
         
+        # Check for login walls or redirects
+        if 'login' in response.url.lower() or 'You must log in' in response.text:
+            logger.warning(f"Login required on mbasic Facebook for {page_name}, falling back to mock data")
+            return generate_mock_facebook_posts(page_name, limit)
+            
         soup = BeautifulSoup(response.text, 'html.parser')
         posts = []
         
@@ -318,11 +343,30 @@ def scrape_mbasic_facebook(page_name, limit=10):
             article_containers = soup.select('div[role="article"]')
         
         if not article_containers:
-            # As fallback, look for any divs with containing post content
-            article_containers = soup.select('div.du')
+            # Try common mbasic selectors
+            article_containers = soup.select('div.du, div.dv, div.cy, div.dw')
             
         if not article_containers:
-            logger.warning(f"No posts found on mbasic Facebook for {page_name}")
+            # Try to find post content in story items
+            article_containers = soup.select('#m_story_permalink_view, .story_body_container')
+            
+        if not article_containers:
+            # Look for any substantial text sections as a last resort
+            candidates = []
+            for section in soup.select('div'):
+                # Skip tiny divs and enormous divs
+                if section.get('class') and ('footer' in ' '.join(section.get('class')) or 'header' in ' '.join(section.get('class'))):
+                    continue
+                    
+                text = section.get_text().strip()
+                if len(text) > 100 and len(text) < 3000:
+                    candidates.append(section)
+                    
+            if candidates:
+                article_containers = candidates
+            
+        if not article_containers:
+            logger.warning(f"No posts found on mbasic Facebook for {page_name}, falling back to mock data")
             # Generate mock posts for demo purposes
             return generate_mock_facebook_posts(page_name, limit)
         

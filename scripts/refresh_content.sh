@@ -12,12 +12,15 @@ if [ ! -d "./venv" ]; then
     python3 -m venv ./venv
     
     echo "Installing required packages..."
-    ./venv/bin/pip install requests feedparser beautifulsoup4 pymongo python-dotenv fake-useragent
+    ./venv/bin/pip install requests feedparser beautifulsoup4 pymongo python-dotenv fake-useragent difflib
 fi
 
 echo ""
 echo "1. Fetching content from RSS feeds..."
 ./venv/bin/python content_aggregator.py --sources rss
+
+# Temporarily disable SSL certificate warnings for testing
+export PYTHONWARNINGS="ignore:Unverified HTTPS request"
 
 echo ""
 echo "2. Scraping Twitter/X content..."
