@@ -30,13 +30,28 @@ logger = logging.getLogger("RefreshContent")
 # Script directory
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# Check for sources.json
+CONFIG_FILE = os.path.join(SCRIPT_DIR, "sources.json")
+CONFIG_AVAILABLE = os.path.exists(CONFIG_FILE)
+
 # Default scrapers and their commands
 SCRAPER_COMMANDS = {
-    "rss": ["content_aggregator.py", "--sources", "rss"],
-    "twitter": ["twitter_scraper.py", "--accounts", "BBCWorld CNN Reuters nytimes guardian techcrunch TheEconomist espn NatGeo WIRED", "--limit", "5"],
-    "facebook": ["facebook_scraper.py", "--pages", "BBCNews CNN reuters nytimes TheGuardian TechCrunch TheEconomist ESPN NationalGeographic WIRED", "--limit", "5"],
-    "reddit": ["content_aggregator.py", "--sources", "reddit", "--limit", "30"],
-    "4chan": ["content_aggregator.py", "--sources", "4chan", "--limit", "20"]
+    "rss": ["content_aggregator.py", "--sources", "rss", "--config", "sources.json"] if CONFIG_AVAILABLE else 
+           ["content_aggregator.py", "--sources", "rss"],
+           
+    "twitter": ["content_aggregator.py", "--sources", "twitter", "--config", "sources.json"] if CONFIG_AVAILABLE else
+               ["twitter_scraper.py", "--accounts", "BBCWorld CNN Reuters nytimes guardian techcrunch TheEconomist espn NatGeo WIRED", "--limit", "5"],
+               
+    "facebook": ["content_aggregator.py", "--sources", "facebook", "--config", "sources.json"] if CONFIG_AVAILABLE else
+                ["facebook_scraper.py", "--pages", "BBCNews CNN reuters nytimes TheGuardian TechCrunch TheEconomist ESPN NationalGeographic WIRED", "--limit", "5"],
+                
+    "reddit": ["content_aggregator.py", "--sources", "reddit", "--config", "sources.json"] if CONFIG_AVAILABLE else
+              ["content_aggregator.py", "--sources", "reddit", "--limit", "30"],
+              
+    "4chan": ["content_aggregator.py", "--sources", "4chan", "--config", "sources.json"] if CONFIG_AVAILABLE else
+             ["content_aggregator.py", "--sources", "4chan", "--limit", "20"],
+             
+    "youtube": ["content_aggregator.py", "--sources", "youtube", "--config", "sources.json"]
 }
 
 VALID_SCRAPERS = list(SCRAPER_COMMANDS.keys())
@@ -57,11 +72,20 @@ def setup_virtualenv():
         logger.info("Creating Python virtual environment...")
         subprocess.run([sys.executable, "-m", "venv", venv_path], check=True)
         logger.info("Installing required packages...")
-        subprocess.run([
-            os.path.join(venv_path, "bin", "pip"), "install", 
-            "requests", "feedparser", "beautifulsoup4",
-            "pymongo", "python-dotenv", "fake-useragent", "difflib"
-        ], check=True)
+        # First check if we have a requirements.txt file
+        if os.path.exists(os.path.join(SCRIPT_DIR, "requirements.txt")):
+            logger.info("Installing packages from requirements.txt...")
+            subprocess.run([
+                os.path.join(venv_path, "bin", "pip"), "install", "-r",
+                os.path.join(SCRIPT_DIR, "requirements.txt")
+            ], check=True)
+        else:
+            logger.info("Installing basic packages...")
+            subprocess.run([
+                os.path.join(venv_path, "bin", "pip"), "install", 
+                "requests", "feedparser", "beautifulsoup4",
+                "pymongo", "python-dotenv", "fake-useragent", "difflib"
+            ], check=True)
         logger.info("Virtual environment setup complete")
     else:
         logger.info("Using existing virtual environment")
@@ -176,7 +200,7 @@ def main():
     signal.signal(signal.SIGTERM, signal_handler)
     
     parser = argparse.ArgumentParser(description="Continuously refresh GlovePost content")
-    parser.add_argument("--scrapers", type=str, default="rss,twitter,facebook,reddit,4chan",
+    parser.add_argument("--scrapers", type=str, default="rss,twitter,facebook,reddit,4chan,youtube",
                         help="Comma-separated list of scrapers (default: all)")
     parser.add_argument("--workers", type=int, default=4, help="Number of worker threads")
     parser.add_argument("--interval", type=int, default=900, help="Refresh interval in seconds (default: 15 min)")
