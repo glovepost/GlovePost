@@ -39,7 +39,7 @@ SCRAPER_COMMANDS = {
     "rss": ["content_aggregator.py", "--sources", "rss", "--config", "sources.json"] if CONFIG_AVAILABLE else 
            ["content_aggregator.py", "--sources", "rss"],
            
-    "twitter": ["content_aggregator.py", "--sources", "twitter", "--config", "sources.json"] if CONFIG_AVAILABLE else
+    "twitter": ["content_aggregator.py", "--sources", "x", "--config", "sources.json"] if CONFIG_AVAILABLE else
                ["twitter_scraper.py", "--accounts", "BBCWorld CNN Reuters nytimes guardian techcrunch TheEconomist espn NatGeo WIRED", "--limit", "5"],
                
     "facebook": ["content_aggregator.py", "--sources", "facebook", "--config", "sources.json"] if CONFIG_AVAILABLE else
@@ -201,7 +201,7 @@ def main():
     
     parser = argparse.ArgumentParser(description="Continuously refresh GlovePost content")
     parser.add_argument("--scrapers", type=str, default="rss,twitter,facebook,reddit,4chan,youtube",
-                        help="Comma-separated list of scrapers (default: all)")
+                        help="Comma-separated list of scrapers (twitter uses X/Twitter, default: all)")
     parser.add_argument("--workers", type=int, default=4, help="Number of worker threads")
     parser.add_argument("--interval", type=int, default=900, help="Refresh interval in seconds (default: 15 min)")
     parser.add_argument("--daemon", action="store_true", help="Run continuously as a daemon")
