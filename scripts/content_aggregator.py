@@ -83,17 +83,29 @@ content_collection = None
 # Load environment variables if available
 if DOTENV_AVAILABLE:
     try:
-        load_dotenv('../backend/.env')
-        logger.info("Loaded environment variables")
+        # Get the absolute path to the .env file
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        env_path = os.path.join(os.path.dirname(current_dir), 'backend', '.env')
+        
+        # Load the .env file
+        load_dotenv(env_path)
+        logger.info(f"Loaded environment variables from {env_path}")
     except Exception as e:
         logger.warning(f"Failed to load .env file: {e}")
 
 # Connect to MongoDB if available
 if MONGODB_AVAILABLE:
     try:
-        client = MongoClient(os.getenv('MONGO_URI') or 'mongodb://localhost:27017/glovepost')
+        # Get MongoDB URI from environment or use default
+        mongo_uri = os.getenv('MONGO_URI') or 'mongodb://localhost:27017/glovepost'
+        client = MongoClient(mongo_uri)
         db = client['glovepost']
-        content_collection = db['content']
+        
+        # Use collection named 'contents' to match what we defined in the Node.js model
+        content_collection = db['contents']
+        
+        # Test connection
+        client.admin.command('ping')
         logger.info("Connected to MongoDB")
     except Exception as e:
         logger.warning(f"MongoDB connection error: {e}. Running in dry-run mode.")
@@ -179,38 +191,94 @@ def fetch_rss_feeds(limit=50):
         'https://feeds.a.dj.com/rss/RSSWorldNews.xml',
         'https://feeds.a.dj.com/rss/RSSWSJD.xml',
         'http://feeds.washingtonpost.com/rss/business',
-        'http://feeds.washingtonpost.com/rss/technology'
+        'http://feeds.washingtonpost.com/rss/technology',
+        'https://www.techrepublic.com/rssfeeds/articles/',
+        'https://www.wired.com/feed/rss',
+        'https://www.espn.com/espn/rss/news',
+        'https://rss.nytimes.com/services/xml/rss/nyt/Sports.xml',
+        'https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml',
+        'https://rss.nytimes.com/services/xml/rss/nyt/Business.xml',
+        'https://www.sciencedaily.com/rss/top/health.xml',
+        'https://medicalxpress.com/rss-feed/'
     ]
     
     articles = []
     for url in feeds:
         try:
+            if not FEEDPARSER_AVAILABLE:
+                # Skip if feedparser not available
+                continue
+                
             feed = feedparser.parse(url)
             logger.info(f"Retrieved {len(feed.entries)} articles from {url}")
             
             # Get source domain for better identification
             domain = urlparse(url).netloc
+            source_name = feed.feed.get('title', domain) if hasattr(feed, 'feed') else domain
             
-            for entry in feed.entries[:int(limit/len(feeds))]:
+            items_to_fetch = min(int(limit/len(feeds)), len(feed.entries))
+            for entry in feed.entries[:items_to_fetch]:
                 # Extract summary, handling different RSS formats
                 summary = ''
                 if 'summary' in entry:
                     summary = entry.summary
                 elif 'description' in entry:
                     summary = entry.description
+                elif 'content' in entry and len(entry.content) > 0:
+                    summary = entry.content[0].value
                 
                 # Clean HTML from summary if present
-                if summary:
-                    soup = BeautifulSoup(summary, 'html.parser')
-                    summary = soup.get_text()
+                if summary and BS4_AVAILABLE:
+                    try:
+                        soup = BeautifulSoup(summary, 'html.parser')
+                        summary = soup.get_text()
+                    except Exception as bs_error:
+                        logger.warning(f"Error cleaning HTML: {bs_error}")
+                        # Use a basic regex to strip HTML tags if BeautifulSoup fails
+                        summary = re.sub(r'<[^>]+>', ' ', summary)
+                elif summary:
+                    # Basic regex to strip HTML tags if BeautifulSoup not available
+                    summary = re.sub(r'<[^>]+>', ' ', summary)
+                    
+                # Parse published date
+                published_date = None
+                if 'published_parsed' in entry and entry.published_parsed:
+                    try:
+                        published_date = datetime.datetime(*entry.published_parsed[:6])
+                    except Exception:
+                        pass
+                elif 'updated_parsed' in entry and entry.updated_parsed:
+                    try:
+                        published_date = datetime.datetime(*entry.updated_parsed[:6])
+                    except Exception:
+                        pass
+                
+                if not published_date:
+                    # Fallback to string versions
+                    date_str = entry.get('published', entry.get('updated', ''))
+                    if date_str:
+                        try:
+                            # Try multiple date formats
+                            for fmt in ['%a, %d %b %Y %H:%M:%S %z', '%Y-%m-%dT%H:%M:%S%z']:
+                                try:
+                                    published_date = datetime.datetime.strptime(date_str, fmt)
+                                    break
+                                except ValueError:
+                                    continue
+                        except Exception:
+                            pass
+                
+                # If all parsing fails, use current time
+                if not published_date:
+                    published_date = datetime.datetime.now()
                 
                 # Convert feedparser entry to our standardized format
                 article = {
                     'title': entry.get('title', 'Untitled'),
                     'summary': summary,
-                    'source': feed.feed.get('title', domain),
+                    'source': source_name,
                     'link': entry.get('link', '#'),
-                    'published': entry.get('published', entry.get('updated', datetime.datetime.now().isoformat())),
+                    'published': published_date.isoformat(),
                     'author': entry.get('author', '')
                 }
                 articles.append(article)
@@ -264,19 +332,33 @@ def clean_content(item):
     
     # Generate a readable timestamp
     if 'published' in item and item['published']:
-        timestamp = item['published']
+        try:
+            # If it's already a string, use it
+            if isinstance(item['published'], str):
+                timestamp = item['published']
+            # If it's a datetime, convert to ISO format
+            elif isinstance(item['published'], datetime.datetime):
+                timestamp = item['published'].isoformat()
+            else:
+                timestamp = str(item['published'])
+        except Exception:
+            timestamp = datetime.datetime.now().isoformat()
     else:
         timestamp = datetime.datetime.now().isoformat()
+    
+    # Ensure summary isn't too long
+    summary = item.get('summary', '')
+    if len(summary) > 1000:
+        summary = summary[:997] + '...'
     
     return {
         'title': item.get('title', 'Untitled'),
         'source': item.get('source', 'Unknown'),
         'url': item.get('link', '#'),
-        'content_summary': item.get('summary', '')[:500],  # Store more content for better recommendations
+        'content_summary': summary,
         'timestamp': timestamp,
         'category': category,
-        'author': item.get('author', ''),
-        'fetched_at': datetime.datetime.now().isoformat()
+        'author': item.get('author', '')
     }
 
 # Store content in MongoDB

@@ -41,28 +41,16 @@ mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopol
   .then(() => console.log('MongoDB connected'))
   .catch(err => console.error(err));
 
-// Connect to PostgreSQL (with better error handling)
-let pgPool;
-try {
-  pgPool = new Pool({ connectionString: process.env.PG_URI });
-  pgPool.query('SELECT NOW()', (err, res) => {
-    if (err) {
-      console.error('PostgreSQL connection error:', err.message);
-      console.log('Continuing without PostgreSQL. Some features may not work.');
-    } else {
-      console.log('PostgreSQL connected');
-    }
-  });
-} catch (error) {
-  console.error('Failed to initialize PostgreSQL pool:', error.message);
-  console.log('Continuing without PostgreSQL. Some features may not work.');
-  // Create mock pg pool for when real pg is not available
-  pgPool = {
-    query: () => Promise.resolve({ rows: [] }),
-    on: () => {},
-    end: () => Promise.resolve()
-  };
-}
+// Connect to PostgreSQL
+const pgPool = new Pool({ connectionString: process.env.PG_URI });
+pgPool.query('SELECT NOW()', (err, res) => {
+  if (err) {
+    console.error('PostgreSQL connection error:', err.message);
+    process.exit(1); // Exit if database connection fails
+  } else {
+    console.log('PostgreSQL connected');
+  }
+});
 
 // API Routes
 app.get('/api/health', (req, res) => {

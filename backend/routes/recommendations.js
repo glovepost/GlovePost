@@ -30,12 +30,14 @@ const generateMockRecommendations = () => {
   });
 };
 
-// Check if Python is available
+// Check if Python is available (using virtual environment)
 const isPythonAvailable = () => {
   try {
-    const result = require('child_process').spawnSync('python3', ['--version']);
+    const pythonPath = path.resolve(__dirname, '../../scripts/venv/bin/python');
+    const result = require('child_process').spawnSync(pythonPath, ['--version']);
     return result.status === 0;
   } catch (error) {
+    console.error('Python virtual environment check error:', error);
     return false;
   }
 };
@@ -67,12 +69,17 @@ router.get('/:userId', async (req, res) => {
       return res.json(generateMockRecommendations());
     }
     
-    // Spawn Python recommendation engine process
-    const pythonPath = path.resolve(__dirname, '../../scripts/recommendation_engine.py');
-    const python = spawn('python3', [
-      pythonPath, 
-      JSON.stringify(preferences),
-      userId
+    // Spawn Python recommendation engine process with virtual environment
+    const pythonScriptPath = path.resolve(__dirname, '../../scripts/recommendation_engine.py');
+    const pythonPath = path.resolve(__dirname, '../../scripts/venv/bin/python');
+    
+    console.log('Using virtual environment python at:', pythonPath);
+    console.log('Running recommendation engine at:', pythonScriptPath);
+    
+    const python = spawn(pythonPath, [
+      pythonScriptPath,
+      '--user', userId,
+      '--preferences', JSON.stringify(preferences)
     ]);
     
     // Set a timeout to handle hanging processes

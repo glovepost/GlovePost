@@ -134,24 +134,53 @@ user_interactions_collection = None
 # Load environment variables if available
 if DOTENV_AVAILABLE:
     try:
-        load_dotenv('../backend/.env')
-        logger.info("Loaded environment variables")
+        # Get the absolute path to the .env file
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        env_path = os.path.join(os.path.dirname(current_dir), 'backend', '.env')
+        
+        # Load the .env file
+        load_dotenv(env_path)
+        logger.info(f"Loaded environment variables from {env_path}")
     except Exception as e:
         logger.warning(f"Failed to load .env file: {e}")
 
 # Connect to MongoDB if available
 if MONGODB_AVAILABLE:
     try:
-        client = MongoClient(os.getenv('MONGO_URI') or 'mongodb://localhost:27017/glovepost')
+        # Get MongoDB URI from environment or use default
+        mongo_uri = os.getenv('MONGO_URI') or 'mongodb://localhost:27017/glovepost'
+        logger.info(f"Connecting to MongoDB with URI: {mongo_uri}")
+        
+        client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
         db = client['glovepost']
-        content_collection = db['content']
-        user_interactions_collection = db.get_collection('user_interactions')
-        logger.info("Connected to MongoDB")
+        
+        # Test connection
+        client.admin.command('ping')
+        logger.info("MongoDB connection successful!")
+        
+        # List all collections and log them
+        collections = db.list_collection_names()
+        logger.info(f"Available collections: {collections}")
+        
+        # Use collection named 'contents' to match what we defined in the Node.js model
+        content_collection = db['contents']
+        user_interactions_collection = db['user_interactions']
+        
+        # Count documents to verify collection access
+        content_count = content_collection.count_documents({})
+        logger.info(f"Found {content_count} documents in contents collection")
+        
+        interaction_count = user_interactions_collection.count_documents({})
+        logger.info(f"Found {interaction_count} documents in user_interactions collection")
+        
+        # Set flag to indicate MongoDB is ready for use
+        MONGODB_AVAILABLE = True
     except Exception as e:
-        logger.warning(f"MongoDB connection error: {e}. Using mock data instead.")
+        logger.warning(f"MongoDB connection error: {e}")
+        logger.warning("Using mock data instead.")
         MONGODB_AVAILABLE = False
 else:
-    logger.warning("MongoDB not available. Using mock data instead.")
+    logger.warning("MongoDB not available (pymongo not installed). Using mock data instead.")
 
 def extract_keywords(text):
     """Extract meaningful keywords from text"""
@@ -281,17 +310,24 @@ def recommend(user_id, preferences, limit=10, verbose=False):
     # Keywords from user interests
     interest_keywords = user_interests.get('keywords', {})
     
-    # Handle MongoDB not available
-    if not MONGODB_AVAILABLE:
-        logger.warning("MongoDB not available, using mock content for recommendations")
-        contents = mock_content
-    else:
-        # Fetch recent content (limit to 200 for better selection)
-        try:
+    # Get content from MongoDB
+    try:
+        # Check if we can actually access the collection
+        count = content_collection.count_documents({})
+        logger.info(f"Found {count} documents in MongoDB")
+        
+        if count > 0:
+            # Fetch recent content (limit to 200 for better selection)
             contents = list(content_collection.find().sort('timestamp', -1).limit(200))
-        except Exception as e:
-            logger.error(f"Error fetching content: {e}")
+            logger.info(f"Retrieved {len(contents)} content items from MongoDB")
+        else:
+            # If collection is empty, use mock content
+            logger.warning("No content found in MongoDB, using mock content")
             contents = mock_content
+    except Exception as e:
+        logger.error(f"Error fetching content from MongoDB: {e}")
+        logger.warning("MongoDB error, falling back to mock content")
+        contents = mock_content
             
     logger.info(f"Found {len(contents)} content items to score")
     
@@ -440,8 +476,15 @@ if __name__ == '__main__':
                 for i in range(min(args.limit, len(mock_content)))
             ]
         
+        # Custom JSON encoder to handle datetime objects
+        class DateTimeEncoder(json.JSONEncoder):
+            def default(self, obj):
+                if isinstance(obj, (datetime.datetime, datetime.date)):
+                    return obj.isoformat()
+                return super(DateTimeEncoder, self).default(obj)
+        
         # Output as JSON for the Node.js process to parse
-        print(json.dumps(recommendations))
+        print(json.dumps(recommendations, cls=DateTimeEncoder))
         
     except Exception as e:
         logger.error(f"Error generating recommendations: {e}")
