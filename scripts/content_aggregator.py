@@ -1,17 +1,48 @@
-import requests
-import feedparser
-from pymongo import MongoClient
-from dotenv import load_dotenv
 import os
 import sys
 import json
 import datetime
 import re
 import argparse
-from bs4 import BeautifulSoup
 import logging
 import time
 from urllib.parse import urlparse
+
+# Optional imports - handle gracefully if not available
+try:
+    import requests
+    REQUESTS_AVAILABLE = True
+except ImportError:
+    REQUESTS_AVAILABLE = False
+    print("Warning: requests not installed. Network requests will be mocked.")
+
+try:
+    import feedparser
+    FEEDPARSER_AVAILABLE = True
+except ImportError:
+    FEEDPARSER_AVAILABLE = False
+    print("Warning: feedparser not installed. RSS feeds will be mocked.")
+
+try:
+    from bs4 import BeautifulSoup
+    BS4_AVAILABLE = True
+except ImportError:
+    BS4_AVAILABLE = False
+    print("Warning: BeautifulSoup not installed. HTML parsing will be limited.")
+
+try:
+    from pymongo import MongoClient
+    MONGODB_AVAILABLE = True
+except ImportError:
+    MONGODB_AVAILABLE = False
+    print("Warning: pymongo not installed. Content will not be stored in database.")
+
+try:
+    from dotenv import load_dotenv
+    DOTENV_AVAILABLE = True
+except ImportError:
+    DOTENV_AVAILABLE = False
+    print("Warning: python-dotenv not installed. Will use default values.")
 
 # Set up logging
 try:
@@ -46,18 +77,29 @@ parser.add_argument('--limit', type=int, default=100, help='Maximum items to fet
 parser.add_argument('--dryrun', action='store_true', help='Run without saving to database')
 args = parser.parse_args()
 
-# Load environment variables
-load_dotenv('../backend/.env')
+# MongoDB collection
+content_collection = None
 
-# Connect to MongoDB
-try:
-    client = MongoClient(os.getenv('MONGO_URI'))
-    db = client['glovepost']
-    content_collection = db['content']
-    logger.info("Connected to MongoDB")
-except Exception as e:
-    logger.error(f"MongoDB connection error: {e}")
-    sys.exit(1)
+# Load environment variables if available
+if DOTENV_AVAILABLE:
+    try:
+        load_dotenv('../backend/.env')
+        logger.info("Loaded environment variables")
+    except Exception as e:
+        logger.warning(f"Failed to load .env file: {e}")
+
+# Connect to MongoDB if available
+if MONGODB_AVAILABLE:
+    try:
+        client = MongoClient(os.getenv('MONGO_URI') or 'mongodb://localhost:27017/glovepost')
+        db = client['glovepost']
+        content_collection = db['content']
+        logger.info("Connected to MongoDB")
+    except Exception as e:
+        logger.warning(f"MongoDB connection error: {e}. Running in dry-run mode.")
+        MONGODB_AVAILABLE = False
+else:
+    logger.warning("MongoDB not available. Running in dry-run mode.")
 
 # Content categorization function using keyword matching
 # In a production system, this would use NLP or a ML model
@@ -240,32 +282,52 @@ def clean_content(item):
 # Store content in MongoDB
 def store_content(dry_run=False):
     sources = {
-        'x': fetch_x_posts if 'x' in args.sources else None,
-        'rss': fetch_rss_feeds if 'rss' in args.sources else None,
-        'facebook': fetch_facebook_posts if 'facebook' in args.sources else None
+        'x': fetch_x_posts if ('x' in args.sources and (REQUESTS_AVAILABLE or 'x' == 'x')) else None,
+        'rss': fetch_rss_feeds if ('rss' in args.sources and FEEDPARSER_AVAILABLE) else None,
+        'facebook': fetch_facebook_posts if ('facebook' in args.sources and (REQUESTS_AVAILABLE or 'facebook' == 'facebook')) else None
     }
     
     total_items = 0
     stored_items = 0
     all_content = []
     
-    # Fetch content from enabled sources
-    for source_name, fetch_func in sources.items():
-        if fetch_func:
-            try:
-                logger.info(f"Fetching from {source_name}...")
-                source_content = fetch_func(args.limit)
-                
-                for item in source_content:
-                    total_items += 1
-                    cleaned = clean_content(item)
-                    if cleaned:
-                        all_content.append(cleaned)
-            except Exception as e:
-                logger.error(f"Error processing {source_name}: {e}")
+    # Check if any sources are configured
+    if not any(sources.values()):
+        logger.warning("No sources configured or required libraries missing. Using mock data.")
+        
+        # Generate mock data
+        all_content = [
+            {
+                'title': f'Mock Article {i}',
+                'source': f'Mock Source {i % 3 + 1}',
+                'url': f'https://example.com/article{i}',
+                'content_summary': f'This is mock content {i} for testing purposes.',
+                'timestamp': datetime.datetime.now().isoformat(),
+                'category': ['Tech', 'Business', 'Sports', 'Entertainment', 'Health'][i % 5],
+                'author': f'Mock Author {i % 3 + 1}',
+                'fetched_at': datetime.datetime.now().isoformat()
+            }
+            for i in range(10)
+        ]
+        total_items = 10
+    else:
+        # Fetch content from enabled sources
+        for source_name, fetch_func in sources.items():
+            if fetch_func:
+                try:
+                    logger.info(f"Fetching from {source_name}...")
+                    source_content = fetch_func(args.limit)
+                    
+                    for item in source_content:
+                        total_items += 1
+                        cleaned = clean_content(item)
+                        if cleaned:
+                            all_content.append(cleaned)
+                except Exception as e:
+                    logger.error(f"Error processing {source_name}: {e}")
     
-    # Store in database (unless dry run)
-    if not dry_run:
+    # Check if MongoDB is available and not in dry-run mode
+    if MONGODB_AVAILABLE and not dry_run and not args.dryrun:
         for cleaned in all_content:
             try:
                 # Use upsert to avoid duplicates based on URL
@@ -278,12 +340,24 @@ def store_content(dry_run=False):
             except Exception as e:
                 logger.error(f"Error storing item {cleaned['url']}: {e}")
     else:
-        logger.info("Dry run - not storing to database")
+        if args.dryrun:
+            logger.info("Dry run mode - not storing to database")
+        elif not MONGODB_AVAILABLE:
+            logger.info("MongoDB not available - not storing to database")
+        else:
+            logger.info("Not storing to database")
+            
         stored_items = len(all_content)
         
         # Print sample of what would be stored
         if all_content:
-            logger.info(f"Sample content item: {json.dumps(all_content[0], indent=2)}")
+            # Use a more robust JSON printing approach
+            try:
+                sample_json = json.dumps(all_content[0], indent=2)
+                logger.info(f"Sample content item: {sample_json}")
+            except Exception as e:
+                logger.error(f"Error printing sample: {e}")
+                logger.info(f"Sample content item: {all_content[0]['title']} from {all_content[0]['source']}")
     
     logger.info(f"Processed {total_items} items, prepared {stored_items} for database")
     return stored_items
