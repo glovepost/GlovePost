@@ -32,7 +32,13 @@ echo "3. Scraping Facebook content..."
 
 echo ""
 echo "4. Filtering and cleaning content..."
+# First run in dry run mode to see what would be changed
 ./venv/bin/python content_filter.py --dryrun --verbose
+
+echo ""
+echo "4.1 Applying content filter changes..."
+# Then actually apply the changes
+./venv/bin/python content_filter.py
 
 echo ""
 echo "5. Verifying final MongoDB content..."
