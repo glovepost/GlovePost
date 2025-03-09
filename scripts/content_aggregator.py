@@ -14,14 +14,27 @@ import time
 from urllib.parse import urlparse
 
 # Set up logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler("../logs/content_aggregator.log"),
-        logging.StreamHandler()
-    ]
-)
+try:
+    # Create logs directory if it doesn't exist
+    logs_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
+    if not os.path.exists(logs_dir):
+        os.makedirs(logs_dir)
+        
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler(os.path.join(logs_dir, "content_aggregator.log")),
+            logging.StreamHandler()
+        ]
+    )
+except Exception as e:
+    # Fallback to console-only logging if file logging fails
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    print(f"Warning: Could not set up file logging: {e}")
 
 logger = logging.getLogger("ContentAggregator")
 
@@ -173,10 +186,10 @@ def fetch_facebook_posts(limit=10):
     mock_posts = []
     topics = [
         ('Tech', 'Just launched our new app that helps you track your productivity throughout the day. Early users are reporting 25% increases in their work output!'),
-        ('Business', 'Our quarterly earnings exceeded expectations with a 15% growth in revenue. We're expanding operations to three new countries next month.'),
+        ('Business', 'Our quarterly earnings exceeded expectations with a 15% growth in revenue. We are expanding operations to three new countries next month.'),
         ('Sports', 'What an amazing game! The team showed incredible resilience and teamwork. Looking forward to the semifinals next week!'),
         ('Entertainment', 'The film festival was incredible this year. So many innovative directors pushing the boundaries of storytelling.'),
-        ('Health', 'My 30-day fitness challenge is complete! Lost 5 pounds and feeling more energetic than ever. Here's what worked for me...')
+        ('Health', 'My 30-day fitness challenge is complete! Lost 5 pounds and feeling more energetic than ever. Here is what worked for me...')
     ]
     
     for i in range(min(limit, 10)):
