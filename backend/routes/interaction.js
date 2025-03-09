@@ -1,7 +1,49 @@
 const express = require('express');
 const router = express.Router();
 const { Pool } = require('pg');
-const pool = new Pool({ connectionString: process.env.PG_URI });
+
+// Mock in-memory storage for interactions when PostgreSQL is not available
+let mockInteractions = [
+  {
+    id: 1,
+    user_id: 1,
+    content_id: 'mock123456',
+    interaction_type: 'view',
+    created_at: new Date(Date.now() - 3600000).toISOString()
+  },
+  {
+    id: 2,
+    user_id: 1,
+    content_id: 'mock789012',
+    interaction_type: 'like',
+    created_at: new Date(Date.now() - 7200000).toISOString()
+  }
+];
+
+// Try to connect to PostgreSQL, but fall back to mock if unavailable
+let pool;
+let isUsingMock = false;
+try {
+  pool = new Pool({ connectionString: process.env.PG_URI });
+  
+  // Test the connection
+  pool.query('SELECT NOW()', (err) => {
+    if (err) {
+      console.warn('PostgreSQL unavailable, using mock Interactions');
+      isUsingMock = true;
+    }
+  });
+} catch (error) {
+  console.warn('PostgreSQL unavailable, using mock Interactions');
+  isUsingMock = true;
+  
+  // Create a mock pool that does nothing
+  pool = {
+    query: () => Promise.resolve({ rows: [] }),
+    on: () => {},
+    end: () => Promise.resolve()
+  };
+}
 
 /**
  * Track user interactions with content
@@ -28,11 +70,26 @@ router.post('/track', async (req, res) => {
       });
     }
     
-    // Record the interaction
-    await pool.query(
-      'INSERT INTO user_interactions (user_id, content_id, interaction_type) VALUES ($1, $2, $3)',
-      [userId, contentId, interactionType]
-    );
+    if (isUsingMock) {
+      // Store in mock storage
+      const newId = mockInteractions.length > 0 
+        ? Math.max(...mockInteractions.map(i => i.id)) + 1 
+        : 1;
+        
+      mockInteractions.push({
+        id: newId,
+        user_id: parseInt(userId),
+        content_id: contentId,
+        interaction_type: interactionType,
+        created_at: new Date().toISOString()
+      });
+    } else {
+      // Record the interaction in PostgreSQL
+      await pool.query(
+        'INSERT INTO user_interactions (user_id, content_id, interaction_type) VALUES ($1, $2, $3)',
+        [userId, contentId, interactionType]
+      );
+    }
     
     // Return success
     res.json({ 
@@ -57,16 +114,25 @@ router.get('/:userId', async (req, res) => {
       return res.status(400).json({ error: 'User ID is required' });
     }
     
-    // Get recent interactions for this user
-    const result = await pool.query(
-      `SELECT * FROM user_interactions 
-       WHERE user_id = $1 
-       ORDER BY created_at DESC 
-       LIMIT 100`,
-      [userId]
-    );
-    
-    res.json(result.rows);
+    if (isUsingMock) {
+      // Get from mock storage
+      const userInteractions = mockInteractions
+        .filter(i => i.user_id === parseInt(userId))
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        
+      res.json(userInteractions);
+    } else {
+      // Get from PostgreSQL
+      const result = await pool.query(
+        `SELECT * FROM user_interactions 
+         WHERE user_id = $1 
+         ORDER BY created_at DESC 
+         LIMIT 100`,
+        [userId]
+      );
+      
+      res.json(result.rows);
+    }
   } catch (error) {
     console.error('Error fetching interaction history:', error);
     res.status(500).json({ error: 'Failed to fetch interaction history' });
@@ -85,11 +151,16 @@ router.delete('/:userId', async (req, res) => {
       return res.status(400).json({ error: 'User ID is required' });
     }
     
-    // Delete all interactions for this user
-    await pool.query(
-      'DELETE FROM user_interactions WHERE user_id = $1',
-      [userId]
-    );
+    if (isUsingMock) {
+      // Clear from mock storage
+      mockInteractions = mockInteractions.filter(i => i.user_id !== parseInt(userId));
+    } else {
+      // Delete from PostgreSQL
+      await pool.query(
+        'DELETE FROM user_interactions WHERE user_id = $1',
+        [userId]
+      );
+    }
     
     res.json({ 
       success: true,
