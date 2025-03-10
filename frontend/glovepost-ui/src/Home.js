@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import ContentCard from './components/ContentCard';
-import { contentApi, recommendationsApi, userApi } from './services/api';
+import { contentApi, recommendationsApi, userApi, interactionsApi } from './services/api';
 import { useAuth } from './contexts/AuthContext';
 import './Home.css';
 // Using CSS-based approach rather than SVG imports
@@ -63,26 +63,91 @@ const Home = () => {
     debouncedSearch(searchQuery);
   }, [searchQuery, debouncedSearch]);
 
-  // Fetch user preferences
+  // Fetch user preferences and downvoted content
   useEffect(() => {
-    const fetchUserPreferences = async () => {
+    const fetchUserData = async () => {
       if (!currentUser) {
-        // Not logged in, use empty preferences
+        // Not logged in, use empty preferences and no downvoted content
         setUserPreferences({});
+        setDislikedContent(new Set());
         return;
       }
       
       try {
-        const response = await userApi.getUser(currentUser.id);
-        setUserPreferences(response.data.preferences || {});
+        // Fetch user preferences from API
+        const preferencesResponse = await userApi.getUser(currentUser.id);
+        setUserPreferences(preferencesResponse.data.preferences || {});
+        
+        // Fetch downvoted content from two sources and combine them:
+        // 1. From the database via API
+        // 2. From localStorage for persistence across refreshes
+        
+        // Get downvoted content from API
+        let downvotedFromApi = [];
+        try {
+          const downvotedResponse = await interactionsApi.getDownvotedContent(currentUser.id);
+          if (downvotedResponse.data && Array.isArray(downvotedResponse.data.downvotedIds)) {
+            downvotedFromApi = downvotedResponse.data.downvotedIds;
+          }
+        } catch (apiError) {
+          console.error('Error fetching downvoted content from API:', apiError);
+        }
+        
+        // Get downvoted content from localStorage
+        let downvotedFromLocal = [];
+        try {
+          const storageKey = `downvoted_${currentUser.id}`;
+          downvotedFromLocal = JSON.parse(localStorage.getItem(storageKey) || '[]');
+        } catch (localError) {
+          console.error('Error fetching downvoted content from localStorage:', localError);
+        }
+        
+        // Combine both sources and remove duplicates
+        const combinedDownvoted = [...new Set([...downvotedFromApi, ...downvotedFromLocal])];
+        
+        // Update state with combined downvoted content
+        setDislikedContent(new Set(combinedDownvoted));
+        
+        // Sync combined list back to localStorage
+        localStorage.setItem(`downvoted_${currentUser.id}`, JSON.stringify(combinedDownvoted));
+        
       } catch (err) {
-        console.error('Error fetching user preferences:', err);
+        console.error('Error fetching user data:', err);
         // Use empty preferences if there's an error
         setUserPreferences({});
+        
+        // Try to at least get downvoted content from localStorage
+        try {
+          const storageKey = `downvoted_${currentUser.id}`;
+          const localDownvoted = JSON.parse(localStorage.getItem(storageKey) || '[]');
+          setDislikedContent(new Set(localDownvoted));
+        } catch (localError) {
+          console.error('Error fetching downvoted content from localStorage:', localError);
+        }
       }
     };
 
-    fetchUserPreferences();
+    fetchUserData();
+    
+    // Add event listener to handle downvotes from other components/pages
+    const handleUserInteraction = (event) => {
+      const { type, contentId, value } = event.detail;
+      
+      // If this is a rating interaction with negative value, add to disliked content
+      if (type === 'rating' && value === -1 && contentId) {
+        setDislikedContent(prev => {
+          const newSet = new Set(prev);
+          newSet.add(contentId);
+          return newSet;
+        });
+      }
+    };
+    
+    window.addEventListener('userInteraction', handleUserInteraction);
+    
+    return () => {
+      window.removeEventListener('userInteraction', handleUserInteraction);
+    };
   }, [currentUser]);
 
   // Fetch latest content and categories from API

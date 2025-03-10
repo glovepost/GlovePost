@@ -123,6 +123,9 @@ export const interactionsApi = {
   
   // Get user's rating for a specific content
   getUserRating: (contentId) => apiClient.get(`/interaction/user-rating/${contentId}`),
+  
+  // Get all content IDs the user has downvoted
+  getDownvotedContent: (userId) => apiClient.get(`/interaction/downvoted/${userId}`),
 };
 
 // Export the default axios instance for direct use

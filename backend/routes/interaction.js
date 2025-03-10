@@ -220,4 +220,39 @@ router.get('/user-rating/:contentId', isAuthenticated, async (req, res) => {
   }
 });
 
+/**
+ * Get all downvoted content IDs for a user
+ * Used to hide content that the user has downvoted
+ */
+router.get('/downvoted/:userId', isAuthenticated, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    if (!userId) {
+      return res.status(400).json({ error: 'User ID is required' });
+    }
+    
+    // Ensure the user can only access their own downvoted content
+    if (userId !== req.user.id) {
+      return res.status(403).json({ error: 'Unauthorized access to other user data' });
+    }
+    
+    // Get from PostgreSQL
+    const result = await pool.query(
+      `SELECT content_id FROM user_interactions 
+       WHERE user_id = $1 AND interaction_type = 'rating' AND rating = -1
+       ORDER BY created_at DESC`,
+      [userId]
+    );
+    
+    // Extract content IDs and return as array
+    const downvotedIds = result.rows.map(row => row.content_id);
+    
+    res.json({ downvotedIds });
+  } catch (error) {
+    console.error('Error fetching downvoted content:', error);
+    res.status(500).json({ error: 'Failed to fetch downvoted content' });
+  }
+});
+
 module.exports = router;

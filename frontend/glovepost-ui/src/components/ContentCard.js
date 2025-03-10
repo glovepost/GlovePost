@@ -350,6 +350,21 @@ const ContentCard = ({ item, showReason = false, onDislike = null }) => {
         } else if (rating === 'down') {
           newCounts.down += 1;
           
+          // Store downvoted content ID in localStorage for persistence
+          try {
+            const downvotedItemId = getItemId();
+            const storageKey = `downvoted_${currentUser.id}`;
+            const existingItems = JSON.parse(localStorage.getItem(storageKey) || '[]');
+            
+            // Only add if not already in the list
+            if (!existingItems.includes(downvotedItemId)) {
+              existingItems.push(downvotedItemId);
+              localStorage.setItem(storageKey, JSON.stringify(existingItems));
+            }
+          } catch (storageError) {
+            console.error('Failed to store downvoted content in localStorage:', storageError);
+          }
+          
           // If this is a thumbs down and we have an onDislike callback, call it
           if (onDislike && typeof onDislike === 'function') {
             // Small delay to show the thumbs down before removal
