@@ -594,8 +594,8 @@ def fetch_youtube_content(config: Dict[str, Any], limit: int = 10) -> List[Dict[
     # Convert list to comma-separated string
     channels_str = ','.join(channels)
     
-    # Run the scraper script
-    args_list = ['--channels', channels_str, '--limit', str(limit), '--workers', str(min(args.workers, 4))]
+    # Run the scraper script - note YouTube scraper doesn't support limit parameter
+    args_list = ['--channels', channels_str, '--workers', str(min(args.workers, 4))]
     content = run_scraper_script('youtube_scraper', args_list)
     
     # Standardize field names
