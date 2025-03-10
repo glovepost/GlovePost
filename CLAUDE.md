@@ -15,7 +15,10 @@
 ### Python Scripts
 - Run content refresh: `cd scripts && ./refresh_content.sh`
 - Run specific scrapers: `cd scripts && ./refresh_content.sh --scrapers=reddit,twitter`
-- Run recommendations: `cd scripts && python scripts/recommendation_engine.py`
+- Run parallel content refresh: `cd scripts && ./refresh_content_parallel.sh`
+- Run parallel with options: `cd scripts && ./refresh_content_parallel.sh --scrapers=rss,reddit --workers=8 --limit=100`
+- Run ML recommendations: `cd scripts && python ml_recommendation_engine.py`
+- Run basic recommendations: `cd scripts && python recommendation_engine.py`
 
 ## Code Style Guidelines
 - **Formatting**: 2-space indentation, Prettier for JS/TS, Black for Python

@@ -6,28 +6,29 @@ This document outlines the improvements made to enhance the performance and effi
 
 We've implemented several key improvements to transform the scraping system from a sequential, single-threaded architecture to a highly efficient multithreaded system:
 
-1. **Continuous scraper daemon**: Replaced the scheduled bash script with a daemon process that constantly refreshes content
-2. **Multithreaded content sources**: Process multiple content sources (RSS, Twitter, Facebook, Reddit, 4chan) in parallel
+1. **Parallel content fetcher**: Created `parallel_content_fetcher.py` to orchestrate efficient multi-source scraping
+2. **Multithreaded content sources**: Process multiple content sources (RSS, Twitter, Facebook, Reddit, 4chan, YouTube) in parallel
 3. **Multithreaded post fetching**: Added threading to individual scrapers to fetch post details concurrently
 4. **Enhanced error handling**: Implemented robust retry mechanisms with exponential backoff
-5. **Systemd service integration**: Created proper system service for automatic startup and monitoring
+5. **Caching**: Added caching with TTL (Time-To-Live) for frequently accessed content
+6. **Improved shell script**: Created `refresh_content_parallel.sh` with better performance monitoring
 
 ## Components
 
 The multithreaded scraping system consists of these main components:
 
-1. **`refresh_content.py`**: Main Python script that manages worker threads and coordinates scraping
+1. **Core components**:
+   - `parallel_content_fetcher.py`: Main Python script that orchestrates parallel execution of sources
+   - `refresh_content_parallel.sh`: Shell script that sets up the environment and runs the fetcher
+
 2. **Enhanced individual scrapers**:
-   - `content_aggregator.py`: Now fetches from different sources in parallel
-   - `reddit_scraper.py`: Adds parallel subreddit processing and post detail fetching
-   - `4chan_scraper.py`: Adds parallel board processing (already had thread detail parallelism)
+   - `content_aggregator.py`: Now integrated with parallel fetching capabilities
+   - `reddit_scraper.py`: Implements parallel subreddit processing and post detail fetching
+   - `4chan_scraper.py`: Implements parallel board processing and thread detail fetching
+   - `twitter_scraper.py`, `facebook_scraper.py`, `youtube_scraper.py`: Other source-specific scrapers
 
-3. **System integration**:
-   - `glovepost-scraper.service`: Systemd service definition
-   - `install_scraper_service.sh`: Installation script for the systemd service
-
-4. **Testing**:
-   - `test_scraper_performance.py`: Simple benchmarking tool for performance comparison
+3. **Configuration**:
+   - `sources.json`: Centralized configuration for all scraping sources
 
 ## Performance Improvements
 
@@ -44,9 +45,17 @@ The multithreaded approach provides significant performance improvements:
 
 Each component in the system uses Python's `ThreadPoolExecutor` to manage worker threads:
 
-1. **Top level** (`refresh_content.py`): Creates a thread pool to run multiple source scrapers concurrently
-2. **Source level** (e.g., `reddit_scraper.py`): Uses a thread pool to process multiple subreddits concurrently
-3. **Detail level** (within individual scrapers): Uses a thread pool to fetch details for multiple posts/threads concurrently
+1. **Top level** (`parallel_content_fetcher.py`): Creates a thread pool to run multiple source scrapers concurrently
+2. **Source level** (e.g., `fetch_rss_feeds`): Uses a thread pool to process multiple feeds concurrently
+3. **Detail level** (e.g., `reddit_scraper.py`): Uses a thread pool to fetch details for multiple posts/threads concurrently
+
+### Caching Layer
+
+The system implements efficient caching to reduce redundant requests:
+
+- **TTL Caching**: Uses `cachetools.TTLCache` to cache responses with appropriate expiration times
+- **Source-specific TTLs**: Different content types have different cache durations (RSS: 15 min, Reddit: 30 min, etc.)
+- **Memory-efficient**: Caches only essential data to minimize memory footprint
 
 ### Rate Limiting and Throttling
 
@@ -55,6 +64,7 @@ We've implemented careful rate limiting to prevent overwhelming the source websi
 - **Global limits**: The main process limits the total number of worker threads
 - **Per-source limits**: Each source has a specific concurrency limit (e.g., 2-3 threads for Reddit)
 - **Jitter and backoff**: Random delays and exponential backoff on failures prevent request bursts
+- **Source-specific delays**: Different sources have customized delay patterns based on their rate limit policies
 
 ### Thread Safety
 
@@ -66,66 +76,78 @@ To ensure thread safety when multiple threads access shared resources:
 
 ## Usage Instructions
 
-### Running the Multithreaded Scraper
+### Running the Parallel Content Fetcher
 
 For a one-time scraper run:
 
 ```bash
-./refresh_content.py
+./refresh_content_parallel.sh
 ```
 
 To run the scraper with specific settings:
 
 ```bash
-./refresh_content.py --scrapers=rss,twitter,reddit --workers=4 --interval=3600
+./refresh_content_parallel.sh --scrapers=rss,reddit --limit=100 --workers=8
 ```
 
-For daemon mode (continuous operation):
+To run in dry-run mode (without saving to database):
 
 ```bash
-./refresh_content.py --daemon --interval=1800  # Run every 30 minutes
+./refresh_content_parallel.sh --dryrun
 ```
 
-### Installing as a System Service
+### Customizing Sources
 
-To install as a systemd service that starts automatically:
+Edit the `sources.json` file to add, remove, or modify content sources:
 
-```bash
-sudo ./install_scraper_service.sh
+```json
+{
+  "rss": [
+    {"url": "https://example.com/feed", "name": "Example Feed", "category": "News"}
+  ],
+  "reddit": [
+    {"subreddit": "technology", "category": "Tech"}
+  ]
+}
 ```
 
-This will:
-1. Install the service to run at system startup
-2. Set up proper resource limits and restrictions
-3. Configure logging to the system journal
+### Setting Up a Cron Job for Regular Updates
 
-### Managing the Service
+To update content every 6 hours:
 
 ```bash
-# Check status
-sudo systemctl status glovepost-scraper.service
+# Add to crontab
+crontab -e
 
-# Start/stop/restart
-sudo systemctl start glovepost-scraper.service
-sudo systemctl stop glovepost-scraper.service
-sudo systemctl restart glovepost-scraper.service
+# Add this line
+0 */6 * * * cd /path/to/GlovePost/scripts && ./refresh_content_parallel.sh > /dev/null 2>&1
+```
+
+### Performance Monitoring
+
+To monitor performance and track timing:
+
+```bash
+# Use the time command for simple timing
+time ./refresh_content_parallel.sh
+
+# Monitor system resources during execution
+htop
 
 # View logs
-sudo journalctl -u glovepost-scraper.service
+tail -f ../logs/parallel_content_fetcher.log
 ```
 
-### Performance Testing
+### Testing Different Configurations
 
-To benchmark the performance:
-
-```bash
-./test_scraper_performance.py
-```
-
-Compare different settings:
+Try different combinations of workers and limits:
 
 ```bash
-./test_scraper_performance.py --scrapers=reddit,4chan --limit=20
+# High concurrency test
+./refresh_content_parallel.sh --workers=10 --scrapers=rss
+
+# Maximum items test
+./refresh_content_parallel.sh --limit=200 --scrapers=reddit,4chan
 ```
 
 ## Customization
@@ -164,3 +186,7 @@ Potential future improvements include:
 2. **Distributed processing**: Distribute scraping across multiple nodes for very large scale
 3. **Dynamic rate limiting**: Adjust concurrency based on response times and rate limit headers
 4. **Queue-based architecture**: Implement a proper task queue system (e.g., Redis Queue or Celery)
+5. **Content deduplication**: Implement content-based deduplication to reduce duplicate stories
+6. **Incremental updates**: Support for ETags and Last-Modified headers for more efficient updates
+7. **Speech-to-text**: Add transcription for audio/video content from YouTube and podcast sources
+8. **Content analysis**: Implement NLP for better categorization and content quality scoring
