@@ -3,460 +3,369 @@
 Content Filter Module for GlovePost Content Aggregator
 
 This module provides advanced filtering and quality assessment for content:
-- Duplicate detection (URL, title, content)
-- Quality filtering (length, spam detection)
-- Noise removal (ads, sponsored content, low-value phrases)
+- Duplicate detection using TF-IDF and cosine similarity
+- Quality filtering with NLP (readability, sentiment, spam detection)
+- Noise removal (ads, fluff, boilerplate)
+- Multithreaded processing for scalability
 """
 
 import os
-import re
+import sys
 import json
 import logging
 import argparse
 import datetime
-from difflib import SequenceMatcher
-import sys
+from concurrent.futures import ThreadPoolExecutor
+from typing import Dict, List, Tuple
+import re
 
-# Optional dependencies - handle gracefully if not available
+# Required dependencies
 try:
     from pymongo import MongoClient
-    MONGODB_AVAILABLE = True
+    from pymongo.errors import ConnectionFailure
 except ImportError:
-    MONGODB_AVAILABLE = False
-    print("Warning: pymongo not installed. Use: pip install pymongo")
+    print("Error: pymongo required. Install with: pip install pymongo")
+    sys.exit(1)
 
 try:
     from dotenv import load_dotenv
-    DOTENV_AVAILABLE = True
 except ImportError:
-    DOTENV_AVAILABLE = False
-    print("Warning: python-dotenv not installed. Use: pip install python-dotenv")
+    print("Error: python-dotenv required. Install with: pip install python-dotenv")
+    sys.exit(1)
 
-# Set up logging
 try:
-    # Create logs directory if it doesn't exist
-    logs_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
-    if not os.path.exists(logs_dir):
-        os.makedirs(logs_dir)
-        
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.FileHandler(os.path.join(logs_dir, "content_filter.log")),
-            logging.StreamHandler()
-        ]
-    )
-except Exception as e:
-    # Fallback to console-only logging if file logging fails
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    print(f"Warning: Could not set up file logging: {e}")
+    import nltk
+    from nltk.tokenize import sent_tokenize, word_tokenize
+    from nltk.corpus import stopwords
+    # Ensure NLTK resources are downloaded
+    nltk.download('punkt', quiet=True)
+    nltk.download('stopwords', quiet=True)
+except ImportError:
+    print("Warning: nltk required. Install with: pip install nltk")
+    nltk = None
 
+try:
+    from sklearn.feature_extraction.text import TfidfVectorizer
+    from sklearn.metrics.pairwise import cosine_similarity
+except ImportError:
+    print("Warning: scikit-learn required. Install with: pip install scikit-learn")
+    TfidfVectorizer = None
+    cosine_similarity = None
+
+try:
+    import readability
+except ImportError:
+    print("Warning: readability not installed. Install with: pip install readability-lxml")
+    readability = None
+
+# Setup logging
+logs_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
+os.makedirs(logs_dir, exist_ok=True)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(os.path.join(logs_dir, "content_filter.log")),
+        logging.StreamHandler()
+    ]
+)
 logger = logging.getLogger("ContentFilter")
 
-# Parse command line arguments
-parser = argparse.ArgumentParser(description='Filter and clean content in MongoDB')
-parser.add_argument('--limit', type=int, default=1000, help='Maximum number of articles to process')
-parser.add_argument('--quality-threshold', type=float, default=0.3, help='Quality score threshold (0-1)')
-parser.add_argument('--similarity-threshold', type=float, default=0.8, help='Similarity threshold for duplicate detection (0-1)')
-parser.add_argument('--dryrun', action='store_true', help='Run without making changes to database')
+# Command-line arguments
+parser = argparse.ArgumentParser(description="Filter and clean GlovePost content in MongoDB")
+parser.add_argument('--limit', type=int, default=1000, help='Max articles to process')
+parser.add_argument('--quality-threshold', type=float, default=0.5, help='Quality score threshold (0-1)')
+parser.add_argument('--similarity-threshold', type=float, default=0.85, help='Similarity threshold for duplicates (0-1)')
+parser.add_argument('--dryrun', action='store_true', help='Run without database changes')
 parser.add_argument('--verbose', action='store_true', help='Show detailed analysis')
+parser.add_argument('--workers', type=int, default=4, help='Number of worker threads')
 args = parser.parse_args()
 
-# MongoDB collection
-content_collection = None
+# Load environment variables
+current_dir = os.path.dirname(os.path.abspath(__file__))
+env_path = os.path.join(os.path.dirname(current_dir), 'backend', '.env')
+load_dotenv(env_path)
+mongo_uri = os.getenv('MONGO_URI', 'mongodb://localhost:27017/glovepost')
 
-# Load environment variables if available
-if DOTENV_AVAILABLE:
-    try:
-        # Get the absolute path to the .env file
-        current_dir = os.path.dirname(os.path.abspath(__file__))
-        env_path = os.path.join(os.path.dirname(current_dir), 'backend', '.env')
-        
-        # Load the .env file
-        load_dotenv(env_path)
-        logger.info(f"Loaded environment variables from {env_path}")
-    except Exception as e:
-        logger.warning(f"Failed to load .env file: {e}")
+# MongoDB connection
+try:
+    client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
+    client.admin.command('ping')
+    db = client['glovepost']
+    content_collection = db['contents']
+    logger.info(f"Connected to MongoDB. Found {content_collection.count_documents({})} documents")
+except ConnectionFailure as e:
+    logger.error(f"Failed to connect to MongoDB: {e}")
+    sys.exit(1)
 
-# Connect to MongoDB if available
-if MONGODB_AVAILABLE:
-    try:
-        # Get MongoDB URI from environment or use default
-        mongo_uri = os.getenv('MONGO_URI') or 'mongodb://localhost:27017/glovepost'
-        logger.info(f"Connecting to MongoDB with URI: {mongo_uri}")
-        
-        client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
-        db = client['glovepost']
-        
-        # Use collection named 'contents' to match what we defined in the Node.js model
-        content_collection = db['contents']
-        
-        # Test connection
-        client.admin.command('ping')
-        logger.info("MongoDB connection successful!")
-        
-        # Count documents to verify collection access
-        content_count = content_collection.count_documents({})
-        logger.info(f"Found {content_count} documents in contents collection")
-        
-    except Exception as e:
-        logger.warning(f"MongoDB connection error: {e}")
-        logger.warning("Content filtering will not be applied")
-        MONGODB_AVAILABLE = False
-else:
-    logger.warning("MongoDB not available (pymongo not installed). Content filtering will not be applied")
-
-# Lists of noise phrases to filter out
+# Noise phrase lists (expanded)
 AD_PHRASES = [
-    "sponsored content",
-    "advertisement",
-    "advertisement feature",
-    "promoted content",
-    "paid content",
-    "sponsored by",
-    "promoted by",
-    "click here",
-    "buy now",
-    "limited time offer",
-    "exclusive offer",
-    "discount code",
-    "promo code",
-    "subscribe now",
-    "sign up now"
+    "sponsored content", "advertisement", "paid content", "promoted by", "buy now",
+    "limited time offer", "discount code", "subscribe today", "shop now", "free trial",
+    "advertisement feature", "click here", "exclusive offer", "promo code", "sign up now"
 ]
 
-# List of clickbait and low-quality phrases
 CLICKBAIT_PHRASES = [
-    "you won't believe",
-    "mind blowing",
-    "will blow your mind",
-    "jaw-dropping",
-    "shocking",
-    "you'll never guess",
-    "this will change everything",
-    "unbelievable",
-    "amazing",
-    "incredible",
-    "game-changing",
-    "revolutionary",
-    "this one weird trick",
-    "number 7 will surprise you",
-    "secrets revealed",
-    "what happens next",
-    "doctors hate",
-    "one weird trick",
-    "crazy trick",
-    "simple trick",
-    "find out why",
-    "don't miss"
+    "you won't believe", "shocking truth", "this one trick", "will blow your mind",
+    "secrets revealed", "find out how", "click to see", "don't miss out", "game changer",
+    "mind blowing", "jaw-dropping", "you'll never guess", "this will change everything",
+    "unbelievable", "amazing", "incredible", "revolutionary", "number 7 will surprise you",
+    "what happens next", "doctors hate", "crazy trick", "simple trick", "find out why"
 ]
 
-# Low-information fluff phrases
 FLUFF_PHRASES = [
-    "in today's fast-paced world",
-    "in this day and age",
-    "needless to say",
-    "in conclusion",
-    "it goes without saying",
-    "as we all know",
-    "when all is said and done",
-    "at the end of the day",
-    "the fact of the matter is",
-    "experts say",
-    "studies show",
-    "according to experts",
-    "according to research",
-    "sources say",
-    "many people are saying"
+    "in today's world", "at the end of the day", "experts say", "studies show",
+    "it goes without saying", "needless to say", "in conclusion", "many people believe",
+    "in today's fast-paced world", "in this day and age", "as we all know", 
+    "when all is said and done", "the fact of the matter is", "according to experts",
+    "according to research", "sources say", "many people are saying"
 ]
 
-def similarity_score(text1, text2):
-    """Calculate similarity between two strings using SequenceMatcher"""
-    # Default to 0 if either string is empty
-    if not text1 or not text2:
-        return 0.0
-        
-    # Calculate Ratcliff/Obershelp similarity ratio
-    return SequenceMatcher(None, text1.lower(), text2.lower()).ratio()
+# Reputable sources for quality boost
+REPUTABLE_SOURCES = [
+    'bbc', 'guardian', 'nytimes', 'washingtonpost', 'reuters', 'ap', 'economist',
+    'nature', 'science', 'nationalgeographic', 'npr', 'aljazeera', 'theverge'
+]
 
-def detect_duplicate(article, collection):
-    """Detect if an article is a duplicate based on URL, title or content similarity"""
-    # Exact URL match is a duplicate
-    url = article.get('url')
+# Initialize TF-IDF Vectorizer for duplicate detection
+if TfidfVectorizer and nltk:
+    stop_words = set(stopwords.words('english'))
+    tfidf_vectorizer = TfidfVectorizer(stop_words=list(stop_words), max_features=5000)
+else:
+    tfidf_vectorizer = None
+
+def detect_duplicate(article: Dict, articles: List[Dict]) -> Tuple[bool, str, Dict]:
+    """Detect duplicates using TF-IDF and cosine similarity."""
+    url = article.get('url', '')
     if url and url != '#':
-        url_matches = list(collection.find({'url': url, '_id': {'$ne': article.get('_id')}}))
-        if url_matches:
-            return True, "URL match", url_matches[0]
-    
-    # Check for duplicate title
-    title = article.get('title')
-    if title:
-        # Exact title match is a duplicate
-        title_matches = list(collection.find({
-            'title': title, 
-            '_id': {'$ne': article.get('_id')},
-            'url': {'$ne': url}  # Avoid finding the same article by URL
-        }))
-        if title_matches:
-            return True, "Title match", title_matches[0]
+        for existing in articles:
+            if existing.get('url') == url and existing.get('_id') != article.get('_id'):
+                return True, "Exact URL match", existing
+
+    # If we don't have TF-IDF capability, fall back to simple comparison
+    if tfidf_vectorizer is None:
+        return False, None, None
+
+    title = article.get('title', '')
+    content = article.get('content_summary', '')
+    if not title or not content:
+        return False, None, None
+
+    # Combine title and content for vectorization
+    text = f"{title} {content}"
+    all_texts = [f"{a.get('title', '')} {a.get('content_summary', '')}" for a in articles if a.get('_id') != article.get('_id')]
+    all_texts.append(text)
+
+    if len(all_texts) < 2:
+        return False, None, None
+
+    try:
+        tfidf_matrix = tfidf_vectorizer.fit_transform(all_texts)
+        similarity_scores = cosine_similarity(tfidf_matrix[-1], tfidf_matrix[:-1])[0]
         
-        # Similar title match
-        similar_titles = []
-        for existing in collection.find({'_id': {'$ne': article.get('_id')}}):
-            existing_title = existing.get('title', '')
-            if existing_title and similarity_score(title, existing_title) > args.similarity_threshold:
-                similar_titles.append(existing)
-                
-        if similar_titles:
-            return True, f"Similar title (above {args.similarity_threshold} threshold)", similar_titles[0]
-    
-    # Check for duplicate content (expensive operation, limit to recent articles)
-    content = article.get('content_summary')
-    if content and len(content) > 100:  # Only check substantial content
-        # Find recent articles to compare with
-        recent_articles = collection.find({
-            '_id': {'$ne': article.get('_id')},
-            'timestamp': {'$gt': (datetime.datetime.now() - datetime.timedelta(days=7)).isoformat()}
-        }).limit(50)  # Only check recent articles for efficiency
+        max_similarity = similarity_scores.max() if similarity_scores.size > 0 else 0
+        if max_similarity > args.similarity_threshold:
+            match_idx = similarity_scores.argmax()
+            return True, f"Similar content (score: {max_similarity:.2f})", articles[match_idx]
+    except Exception as e:
+        logger.warning(f"Error in similarity detection: {e}")
         
-        for existing in recent_articles:
-            existing_content = existing.get('content_summary', '')
-            if existing_content and len(existing_content) > 100:
-                if similarity_score(content, existing_content) > args.similarity_threshold:
-                    return True, f"Similar content (above {args.similarity_threshold} threshold)", existing
-    
     return False, None, None
 
-def calculate_quality_score(article):
-    """Calculate a quality score for an article based on multiple factors"""
-    score = 0.5  # Start with neutral score
+def calculate_quality_score(article: Dict) -> Tuple[float, List[str]]:
+    """Calculate quality score using NLP and heuristics."""
+    score = 0.5  # Base score
     reasons = []
-    
-    # 1. Check content length
-    content = article.get('content_summary', '')
-    if not content:
-        score -= 0.3
-        reasons.append("No content")
-    elif len(content) < 50:
-        score -= 0.2
-        reasons.append("Very short content")
-    elif len(content) > 500:
-        score += 0.1
-        reasons.append("Substantial content length")
-    
-    # 2. Check for ads and sponsored content
-    lower_content = content.lower()
-    ad_matches = [phrase for phrase in AD_PHRASES if phrase in lower_content]
-    if ad_matches:
-        score -= 0.2 * min(1, len(ad_matches) / 3)  # Subtract up to 0.2 for ads
-        reasons.append(f"Contains ad phrases: {', '.join(ad_matches[:3])}")
-    
-    # 3. Check for clickbait
-    clickbait_matches = [phrase for phrase in CLICKBAIT_PHRASES if phrase in lower_content]
-    if clickbait_matches:
-        score -= 0.15 * min(1, len(clickbait_matches) / 2)  # Subtract up to 0.15 for clickbait
-        reasons.append(f"Contains clickbait phrases: {', '.join(clickbait_matches[:3])}")
-    
-    # 4. Check for fluff content
-    fluff_matches = [phrase for phrase in FLUFF_PHRASES if phrase in lower_content]
-    if fluff_matches:
-        score -= 0.1 * min(1, len(fluff_matches) / 3)  # Subtract up to 0.1 for fluff
-        reasons.append(f"Contains fluff phrases: {', '.join(fluff_matches[:3])}")
-    
-    # 5. Check for grammatical errors (simple heuristic)
-    # Multiple sequential punctuation is often a sign of poor quality
-    if re.search(r'[!?]{2,}', content) or re.search(r'[.]{4,}', content):
-        score -= 0.1
-        reasons.append("Contains excessive punctuation")
-    
-    # 6. Check for all caps words (excluding acronyms)
-    all_caps_words = re.findall(r'\b[A-Z]{4,}\b', content)
-    if len(all_caps_words) > 3:
-        score -= 0.1
-        reasons.append("Contains excessive ALL CAPS text")
-    
-    # 7. Check for very short sentences (simple proxy for quality)
-    sentences = re.split(r'[.!?]', content)
-    short_sentences = [s for s in sentences if len(s.strip().split()) < 4 and len(s.strip()) > 0]
-    if len(short_sentences) > len(sentences) / 2 and len(sentences) > 3:
-        score -= 0.1
-        reasons.append("Predominantly very short sentences")
-        
-    # 8. Boost score for reputable sources
-    source = article.get('source', '').lower()
-    reputable_sources = ['bbc', 'guardian', 'nytimes', 'washingtonpost', 'reuters', 'ap', 
-                        'economist', 'nature', 'science', 'nationalgeographic']
-    if any(rs in source for rs in reputable_sources):
-        score += 0.1
-        reasons.append("Content from reputable source")
-    
-    # Ensure score is within 0-1 range
-    score = max(0.0, min(1.0, score))
-    
-    return score, reasons
 
-def clean_article_content(article):
-    """Clean an article's content by removing ads, fluff, etc."""
+    content = article.get('content_summary', '')
+    title = article.get('title', '')
+    if not content or not title:
+        score -= 0.4
+        reasons.append("Missing content or title")
+        return score, reasons
+
+    # Length check
+    content_length = len(content)
+    if content_length < 50:
+        score -= 0.3
+        reasons.append("Content too short")
+    elif content_length > 1000:
+        score += 0.15
+        reasons.append("Substantial content length")
+
+    # Noise detection
+    lower_content = content.lower()
+    ad_count = sum(phrase in lower_content for phrase in AD_PHRASES)
+    clickbait_count = sum(phrase in lower_content for phrase in CLICKBAIT_PHRASES)
+    fluff_count = sum(phrase in lower_content for phrase in FLUFF_PHRASES)
+    
+    if ad_count:
+        score -= 0.2 * min(1, ad_count / 2)
+        reasons.append(f"Contains {ad_count} ad phrases")
+    if clickbait_count:
+        score -= 0.15 * min(1, clickbait_count / 2)
+        reasons.append(f"Contains {clickbait_count} clickbait phrases")
+    if fluff_count:
+        score -= 0.1 * min(1, fluff_count / 3)
+        reasons.append(f"Contains {fluff_count} fluff phrases")
+
+    # Readability (if available)
+    if readability:
+        try:
+            readability_score = readability.getmeasures(content, lang='en')['readability grades']['FleschReadingEase']
+            if readability_score > 60:
+                score += 0.1
+                reasons.append("High readability")
+            elif readability_score < 30:
+                score -= 0.1
+                reasons.append("Low readability")
+        except Exception as e:
+            logger.warning(f"Readability calculation failed: {e}")
+
+    # Sentence structure (if nltk available)
+    if nltk:
+        try:
+            sentences = sent_tokenize(content)
+            if len(sentences) > 0:
+                avg_sentence_length = sum(len(word_tokenize(s)) for s in sentences) / len(sentences)
+                if avg_sentence_length < 5:
+                    score -= 0.1
+                    reasons.append("Very short sentences")
+                elif avg_sentence_length > 20:
+                    score += 0.05
+                    reasons.append("Complex sentence structure")
+        except Exception as e:
+            logger.warning(f"Sentence analysis failed: {e}")
+    else:
+        # Fallback to regex-based sentence detection
+        sentences = re.split(r'[.!?]', content)
+        short_sentences = [s for s in sentences if len(s.strip().split()) < 4 and len(s.strip()) > 0]
+        if len(short_sentences) > len(sentences) / 2 and len(sentences) > 3:
+            score -= 0.1
+            reasons.append("Predominantly very short sentences")
+
+    # Source reputation
+    source = article.get('source', '').lower()
+    if any(rs in source for rs in REPUTABLE_SOURCES):
+        score += 0.15
+        reasons.append("Reputable source")
+    
+    # User feedback (if available)
+    upvotes = article.get('upvotes', 0)
+    downvotes = article.get('downvotes', 0)
+    if upvotes + downvotes > 10:
+        feedback_score = (upvotes - downvotes) / (upvotes + downvotes + 1)
+        score += feedback_score * 0.1
+        reasons.append(f"User feedback adjusted score: {feedback_score:.2f}")
+
+    return max(0.0, min(1.0, score)), reasons
+
+def clean_article_content(article: Dict) -> Tuple[str, List[str]]:
+    """Clean article content by removing noise and normalizing text."""
     content = article.get('content_summary', '')
     if not content:
         return content, []
-    
-    original_length = len(content)
+
     modifications = []
     
-    # 1. Remove ad phrases
-    for phrase in AD_PHRASES:
-        if phrase in content.lower():
-            content = re.sub(re.escape(phrase), '', content, flags=re.IGNORECASE)
-            modifications.append(f"Removed ad phrase: '{phrase}'")
-    
-    # 2. Remove excessive whitespace, newlines, etc.
+    # Remove noise phrases
+    for phrase_list, label in [(AD_PHRASES, "ad"), (CLICKBAIT_PHRASES, "clickbait"), (FLUFF_PHRASES, "fluff")]:
+        for phrase in phrase_list:
+            if phrase in content.lower():
+                content = re.sub(re.escape(phrase), '', content, flags=re.IGNORECASE)
+                modifications.append(f"Removed {label} phrase: '{phrase}'")
+
+    # Normalize text
     content = re.sub(r'\s+', ' ', content).strip()
-    if original_length - len(content) > 10:
-        modifications.append("Removed excessive whitespace")
-    
-    # 3. Remove redundant fluff phrases
-    for phrase in FLUFF_PHRASES:
-        if phrase in content.lower():
-            content = re.sub(re.escape(phrase), '', content, flags=re.IGNORECASE)
-            modifications.append(f"Removed fluff phrase: '{phrase}'")
-    
-    # 4. Remove excessive punctuation
-    original = content
-    content = re.sub(r'!{2,}', '!', content)
-    content = re.sub(r'\?{2,}', '?', content)
+    content = re.sub(r'[!?]{2,}', '!', content)
     content = re.sub(r'\.{4,}', '...', content)
-    if original != content:
-        modifications.append("Normalized excessive punctuation")
     
-    # 5. Clean up all caps text (excluding acronyms)
+    # Handle ALL CAPS text while preserving acronyms
     def _fix_caps(match):
         word = match.group(0)
         # Preserve likely acronyms
-        if len(word) <= 5 and word.isupper():
+        if len(word) <= 5:
             return word
         return word.capitalize()
     
-    original = content
     content = re.sub(r'\b[A-Z]{4,}\b', _fix_caps, content)
-    if original != content:
-        modifications.append("Fixed excessive ALL CAPS text")
     
+    if modifications:
+        modifications.append("Normalized text formatting")
+
     return content, modifications
 
-def filter_and_clean_content():
-    """Main function to filter and clean content in MongoDB"""
-    if not MONGODB_AVAILABLE:
-        logger.error("MongoDB not available, cannot proceed with filtering")
-        return
+def process_article(article: Dict, all_articles: List[Dict]) -> Dict:
+    """Process a single article for filtering and cleaning."""
+    stats = {'is_duplicate': False, 'low_quality': False, 'cleaned': False, 'deleted': False}
     
-    # Get articles for processing
-    articles = list(content_collection.find().sort('timestamp', -1).limit(args.limit))
-    logger.info(f"Processing {len(articles)} articles for filtering and cleaning")
-    
-    stats = {
-        'processed': 0,
-        'duplicates': 0,
-        'low_quality': 0,
-        'cleaned': 0,
-        'deleted': 0
-    }
-    
-    for article in articles:
-        article_id = article.get('_id')
-        try:
-            stats['processed'] += 1
-            
-            # 1. Check for duplicates
-            is_duplicate, duplicate_reason, duplicate_match = detect_duplicate(article, content_collection)
-            if is_duplicate:
-                logger.info(f"Duplicate article detected: {article.get('title')} - {duplicate_reason}")
-                stats['duplicates'] += 1
-                
-                if args.verbose:
-                    logger.info(f"Original: {duplicate_match.get('title')} ({duplicate_match.get('_id')})")
-                    logger.info(f"Duplicate: {article.get('title')} ({article_id})")
-                
-                if not args.dryrun:
-                    # Delete the newer duplicate
-                    if (article.get('timestamp', '') > duplicate_match.get('timestamp', '')):
-                        content_collection.delete_one({'_id': article_id})
-                    else:
-                        content_collection.delete_one({'_id': duplicate_match.get('_id')})
-                    stats['deleted'] += 1
-                continue
-            
-            # 2. Calculate quality score
-            quality_score, quality_reasons = calculate_quality_score(article)
-            
-            if args.verbose:
-                logger.info(f"Article: {article.get('title')}")
-                logger.info(f"Quality score: {quality_score:.2f}")
-                for reason in quality_reasons:
-                    logger.info(f"- {reason}")
-            
-            # 3. Handle low quality content
-            if quality_score < args.quality_threshold:
-                logger.info(f"Low quality article detected: {article.get('title')} (score: {quality_score:.2f})")
-                stats['low_quality'] += 1
-                
-                if not args.dryrun:
-                    # Delete articles below threshold
-                    content_collection.delete_one({'_id': article_id})
-                    stats['deleted'] += 1
-                continue
-            
-            # 4. Clean content
-            cleaned_content, modifications = clean_article_content(article)
-            
-            if modifications and len(cleaned_content) > 0:
-                logger.info(f"Cleaned article: {article.get('title')}")
-                if args.verbose:
-                    for mod in modifications:
-                        logger.info(f"- {mod}")
-                
-                stats['cleaned'] += 1
-                
-                if not args.dryrun:
-                    # Update with cleaned content
-                    content_collection.update_one(
-                        {'_id': article_id},
-                        {'$set': {'content_summary': cleaned_content}}
-                    )
-                    
-        except Exception as e:
-            logger.error(f"Error processing article {article_id}: {e}")
-    
-    # Log summary stats
-    logger.info("=== Content Filter Summary ===")
-    logger.info(f"Processed: {stats['processed']} articles")
-    logger.info(f"Duplicates detected: {stats['duplicates']}")
-    logger.info(f"Low quality articles: {stats['low_quality']}")
-    logger.info(f"Articles cleaned: {stats['cleaned']}")
-    logger.info(f"Articles deleted: {stats['deleted'] if not args.dryrun else 0} ({stats['deleted']} would be deleted in non-dry-run mode)")
-    
+    # Duplicate check
+    is_duplicate, reason, match = detect_duplicate(article, all_articles)
+    if is_duplicate:
+        stats['is_duplicate'] = True
+        stats['reason'] = reason
+        if not args.dryrun:
+            content_collection.delete_one({'_id': article['_id']})
+            stats['deleted'] = True
+        return stats
+
+    # Quality check
+    quality_score, quality_reasons = calculate_quality_score(article)
+    if quality_score < args.quality_threshold:
+        stats['low_quality'] = True
+        stats['reason'] = f"Quality score {quality_score:.2f} < {args.quality_threshold}"
+        if not args.dryrun:
+            content_collection.delete_one({'_id': article['_id']})
+            stats['deleted'] = True
+        return stats
+
+    # Clean content
+    cleaned_content, modifications = clean_article_content(article)
+    if modifications:
+        stats['cleaned'] = True
+        if not args.dryrun:
+            content_collection.update_one(
+                {'_id': article['_id']},
+                {'$set': {'content_summary': cleaned_content}}
+            )
+
+    if args.verbose:
+        logger.info(f"Article: {article.get('title')}")
+        logger.info(f"Quality: {quality_score:.2f} - {quality_reasons}")
+        logger.info(f"Modifications: {modifications}")
+
     return stats
 
+def filter_and_clean_content():
+    """Main function to filter and clean content."""
+    articles = list(content_collection.find().sort('timestamp', -1).limit(args.limit))
+    logger.info(f"Processing {len(articles)} articles")
+
+    stats = {'processed': 0, 'duplicates': 0, 'low_quality': 0, 'cleaned': 0, 'deleted': 0}
+    
+    with ThreadPoolExecutor(max_workers=args.workers) as executor:
+        futures = [executor.submit(process_article, article, articles) for article in articles]
+        for future in futures:
+            result = future.result()
+            stats['processed'] += 1
+            stats['duplicates'] += int(result['is_duplicate'])
+            stats['low_quality'] += int(result['low_quality'])
+            stats['cleaned'] += int(result['cleaned'])
+            stats['deleted'] += int(result['deleted'])
+
+    logger.info("=== Content Filter Summary ===")
+    for key, value in stats.items():
+        logger.info(f"{key.capitalize()}: {value}")
+    if args.dryrun:
+        logger.info("(Dry run - no changes applied)")
+
 if __name__ == '__main__':
+    logger.info(f"Starting content filter {'(dry run)' if args.dryrun else ''}")
+    logger.info(f"Workers: {args.workers}, Quality threshold: {args.quality_threshold}, Similarity threshold: {args.similarity_threshold}")
     try:
-        if not MONGODB_AVAILABLE:
-            logger.error("MongoDB not available. Please install pymongo and ensure MongoDB is running.")
-            sys.exit(1)
-        
-        mode = "DRY RUN - No changes will be made" if args.dryrun else "LIVE MODE - Changes will be applied"
-        logger.info(f"Starting content filter in {mode}")
-        logger.info(f"Quality threshold: {args.quality_threshold}")
-        logger.info(f"Similarity threshold: {args.similarity_threshold}")
-        
         filter_and_clean_content()
-        
     except KeyboardInterrupt:
-        logger.info("Script interrupted by user")
-        sys.exit(0)
+        logger.info("Interrupted by user")
     except Exception as e:
         logger.error(f"Unhandled exception: {e}")
         sys.exit(1)

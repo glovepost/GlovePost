@@ -1,4 +1,4 @@
-# tasklist.md - GlovePost Development Tasks (Updated March 09, 2025)
+# tasklist.md - GlovePost Development Tasks (Updated March 10, 2025)
 
 ## Content Aggregation
 - **Completed:**
@@ -25,8 +25,14 @@
     - [x] Create `sources.json` for unified source management
     - [x] Structure configuration by source type (RSS, Twitter, Facebook, Reddit, 4chan, YouTube)
     - [x] Include category mapping and source metadata
+  - [x] Upgrade `content_filter.py` for expanded content pool
+    - [x] Implement TF-IDF duplicate detection with sklearn for semantic similarity
+    - [x] Add NLP-based quality scoring with NLTK and readability metrics
+    - [x] Enable multithreaded processing with ThreadPoolExecutor for scalability
+    - [x] Enhance noise removal with expanded phrase lists
+    - [x] Integrate user feedback (upvotes/downvotes) into quality scoring
+    - [x] Add source reputation weighting for quality assessment
 - **Pending:**
-  - [ ] Integrate more advanced natural language processing (NLP) techniques to assess content relevance and quality
   - [ ] Implement tracking of source reliability and content quality over time
   - [ ] Add support for image content analysis and extraction
   - [ ] Create a scheduler for periodic content updates
@@ -376,17 +382,22 @@
    - Created a distinct visual identity for the application
    - Designed and implemented CSS-based icons for the metaphor
    - Styled ContentCard components with glove imagery and improved UX
-5. **Implement Machine Learning Model for Recommendations**
-   - Transition to LightGBM-based system inspired by Twitter’s algorithm
+5. ✅ **Upgrade Content Filtering System** (COMPLETED)
+   - Implemented advanced TF-IDF duplicate detection with sklearn
+   - Added multithreaded processing for scalability with large content pools
+   - Integrated NLP-based quality scoring with readability metrics
+   - Enhanced noise removal and source reputation weighting
+6. **Implement Machine Learning Model for Recommendations**
+   - Transition to LightGBM-based system inspired by Twitter's algorithm
    - Define features, train model, and integrate for personalized recommendations
-6. ✅ **Replace refresh_content.sh with Multithreaded refresh_content.py** (COMPLETED)
+7. ✅ **Replace refresh_content.sh with Multithreaded refresh_content.py** (COMPLETED)
    - Created Python-based daemon with parallel processing
    - Implemented thread pools for improved efficiency
    - Added systemd service for automated startup and monitoring
    - Enhanced individual scrapers with parallel processing
 
 ## Additional Notes
-- **Research Integration:** Enhanced recommendation engine with Twitter’s ML approach (LightGBM, two-stage process), adding scalability and transparency tasks.
+- **Research Integration:** Enhanced recommendation engine with Twitter's ML approach (LightGBM, two-stage process), adding scalability and transparency tasks.
 - **Scraping Compliance:** Web scraping for X, Facebook, 4chan, and Reddit must comply with terms of service and robots.txt. Fallbacks (e.g., Nitter) improve reliability.
 - **User Empowerment:** ML model transparency, thumbs up/down, commenting, and search empower users to control their experience.
 - **Thematic Design:** Glove-on-post metaphor ties into UI and recommendation explanations (e.g., "raising" content via ML scores).

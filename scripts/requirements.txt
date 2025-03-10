@@ -6,3 +6,4 @@ scikit-learn==1.4.1
 lightgbm==4.3.0
 scipy==1.13.1
 nltk==3.8.1
+readability-lxml==0.8.1
