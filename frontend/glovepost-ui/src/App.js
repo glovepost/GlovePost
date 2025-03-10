@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
 import Home from './Home';
 import Settings from './Settings';
+import Bookmarks from './Bookmarks';
+import Article from './Article';
 import Login from './components/Login';
 import Register from './components/Register';
 import ProfileDropdown from './components/ProfileDropdown';
@@ -72,6 +74,11 @@ const AppContent = () => {
           {currentUser ? (
             <>
               <li>
+                <Link to="/bookmarks">
+                  Saved
+                </Link>
+              </li>
+              <li>
                 <Link to="/settings">Settings</Link>
               </li>
               <li className="profile-menu">
@@ -112,6 +119,14 @@ const AppContent = () => {
             } 
           />
           <Route 
+            path="/bookmarks" 
+            element={
+              <ProtectedRoute>
+                <Bookmarks />
+              </ProtectedRoute>
+            } 
+          />
+          <Route 
             path="/profile" 
             element={
               <ProtectedRoute>
@@ -119,6 +134,7 @@ const AppContent = () => {
               </ProtectedRoute>
             } 
           />
+          <Route path="/article/:id" element={<Article />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
         </Routes>

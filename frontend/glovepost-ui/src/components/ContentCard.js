@@ -1,13 +1,16 @@
 import React, { useState, useCallback, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { interactionsApi } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
 import './ContentCard.css';
 // Using CSS-based approach rather than SVG imports
 
-const ContentCard = ({ item, showReason = false }) => {
+const ContentCard = ({ item, showReason = false, onDislike = null }) => {
   const { currentUser } = useAuth();
   const [userRating, setUserRating] = useState(null);
   const [ratingCount, setRatingCount] = useState({ up: 0, down: 0 });
+  const [showMLIndicator, setShowMLIndicator] = useState(false);
+  const [isBookmarked, setIsBookmarked] = useState(false);
   
   // Detailed validation of item
   const validateItem = () => {
@@ -54,6 +57,26 @@ const ContentCard = ({ item, showReason = false }) => {
       });
     }
   }, [item]);
+  
+  // Check if the item is bookmarked
+  useEffect(() => {
+    if (!currentUser) return;
+    
+    // Check from localStorage
+    const checkBookmarkStatus = () => {
+      try {
+        const bookmarks = JSON.parse(localStorage.getItem(`bookmarks_${currentUser.id}`)) || [];
+        const itemId = getItemId();
+        const isInBookmarks = bookmarks.some(bookmark => bookmark.id === itemId);
+        setIsBookmarked(isInBookmarks);
+      } catch (error) {
+        console.error('Failed to check bookmark status:', error);
+        setIsBookmarked(false);
+      }
+    };
+    
+    checkBookmarkStatus();
+  }, [currentUser, getItemId]);
 
   // Track when user views the content and fetch user rating and rating counts
   useEffect(() => {
@@ -71,6 +94,15 @@ const ContentCard = ({ item, showReason = false }) => {
           getItemId(),
           'view'
         );
+        // Dispatch a custom event to notify other components about the new interaction
+        window.dispatchEvent(new CustomEvent('userInteraction', { 
+          detail: { type: 'view', contentId: getItemId() }
+        }));
+        
+        // Show ML training indicator
+        setShowMLIndicator(true);
+        // Hide it after 3 seconds
+        setTimeout(() => setShowMLIndicator(false), 3000);
       } catch (error) {
         console.error('Failed to record view:', error);
         // Non-critical error, no need to show to user
@@ -119,7 +151,12 @@ const ContentCard = ({ item, showReason = false }) => {
   }, [currentUser, getItemId, isValidItem]);
   
   // Handle click on the content
-  const handleContentClick = async () => {
+  const handleContentClick = async (e) => {
+    // If clicking on a button, don't navigate
+    if (e.target.closest('button') || e.target.closest('a')) {
+      return;
+    }
+    
     if (currentUser) {
       try {
         await interactionsApi.trackInteraction(
@@ -127,6 +164,15 @@ const ContentCard = ({ item, showReason = false }) => {
           getItemId(),
           'click'
         );
+        // Dispatch a custom event to notify other components about the new interaction
+        window.dispatchEvent(new CustomEvent('userInteraction', { 
+          detail: { type: 'click', contentId: getItemId() }
+        }));
+        
+        // Show ML training indicator
+        setShowMLIndicator(true);
+        // Hide it after 3 seconds
+        setTimeout(() => setShowMLIndicator(false), 3000);
       } catch (error) {
         console.error('Failed to record click:', error);
       }
@@ -156,6 +202,16 @@ const ContentCard = ({ item, showReason = false }) => {
         'share'
       );
       
+      // Dispatch a custom event to notify other components about the new interaction
+      window.dispatchEvent(new CustomEvent('userInteraction', { 
+        detail: { type: 'share', contentId: getItemId() }
+      }));
+      
+      // Show ML training indicator
+      setShowMLIndicator(true);
+      // Hide it after 3 seconds
+      setTimeout(() => setShowMLIndicator(false), 3000);
+      
       // In a real app, this would show a share dialog
       alert(`Shared: ${item.title}`);
     } catch (error) {
@@ -181,8 +237,58 @@ const ContentCard = ({ item, showReason = false }) => {
         'bookmark'
       );
       
-      // In a real app, this would add to bookmarks in user profile
-      alert(`Bookmarked: ${item.title}`);
+      // Dispatch a custom event to notify other components about the new interaction
+      window.dispatchEvent(new CustomEvent('userInteraction', { 
+        detail: { type: 'bookmark', contentId: getItemId() }
+      }));
+      
+      // Show ML training indicator
+      setShowMLIndicator(true);
+      // Hide it after 3 seconds
+      setTimeout(() => setShowMLIndicator(false), 3000);
+      
+      // Toggle bookmark status
+      setIsBookmarked(prevState => {
+        const newState = !prevState;
+        
+        // Get current bookmarks
+        let bookmarks = [];
+        try {
+          bookmarks = JSON.parse(localStorage.getItem(`bookmarks_${currentUser.id}`)) || [];
+        } catch (error) {
+          console.error('Failed to parse bookmarks:', error);
+          bookmarks = [];
+        }
+        
+        if (newState) {
+          // Add to bookmarks
+          const itemToBookmark = {
+            id: getItemId(),
+            title: item.title,
+            source: item.source,
+            category: item.category,
+            content_summary: item.content_summary,
+            url: item.url,
+            timestamp: item.timestamp,
+            bookmarkedAt: new Date().toISOString()
+          };
+          
+          bookmarks.push(itemToBookmark);
+        } else {
+          // Remove from bookmarks
+          bookmarks = bookmarks.filter(bookmark => bookmark.id !== getItemId());
+        }
+        
+        // Save to localStorage
+        localStorage.setItem(`bookmarks_${currentUser.id}`, JSON.stringify(bookmarks));
+        
+        // Dispatch event to update Bookmarks page if open
+        window.dispatchEvent(new CustomEvent('bookmarkUpdated', { 
+          detail: { userId: currentUser.id }
+        }));
+        
+        return newState;
+      });
     } catch (error) {
       console.error('Failed to record bookmark:', error);
     }
@@ -210,6 +316,20 @@ const ContentCard = ({ item, showReason = false }) => {
         rating === 'up' ? 1 : -1
       );
       
+      // Dispatch a custom event to notify other components about the new interaction
+      window.dispatchEvent(new CustomEvent('userInteraction', { 
+        detail: { 
+          type: 'rating', 
+          contentId: getItemId(),
+          value: rating === 'up' ? 1 : -1
+        }
+      }));
+      
+      // Show ML training indicator
+      setShowMLIndicator(true);
+      // Hide it after 3 seconds
+      setTimeout(() => setShowMLIndicator(false), 3000);
+      
       // Update local state to reflect the rating
       setUserRating(rating);
       
@@ -229,6 +349,14 @@ const ContentCard = ({ item, showReason = false }) => {
           newCounts.up += 1;
         } else if (rating === 'down') {
           newCounts.down += 1;
+          
+          // If this is a thumbs down and we have an onDislike callback, call it
+          if (onDislike && typeof onDislike === 'function') {
+            // Small delay to show the thumbs down before removal
+            setTimeout(() => {
+              onDislike(getItemId());
+            }, 300);
+          }
         }
         
         return newCounts;
@@ -298,17 +426,47 @@ const ContentCard = ({ item, showReason = false }) => {
         {item.category || 'General'}
       </div>
       
-      
-      <h3 className="content-title">{item.title}</h3>
-      <div className="content-meta">
-        <span className="content-source">{item.source}</span>
-        <span className="content-date">{formatDate(item.timestamp)}</span>
+      {/* Keep the card clickable to external source */}
+      <div className="content-link" onClick={handleContentClick}>
+        <h3 className="content-title">{item.title}</h3>
+        <div className="content-meta">
+          <span className="content-source">{item.source}</span>
+          <span className="content-date">{formatDate(item.timestamp)}</span>
+        </div>
+        
+        <p className="content-summary">{item.content_summary}</p>
       </div>
       
-      <p className="content-summary">{item.content_summary}</p>
+      {/* ML Training Indicator */}
+      {showMLIndicator && currentUser && (
+        <div className="ml-training-indicator">
+          <div className="ml-training-indicator-dot"></div>
+          Training ML Model
+        </div>
+      )}
       
       {showReason && item.reason && (
-        <div className="content-reason">{item.reason}</div>
+        <div className="content-reason">
+          {item.reason}
+          {item.score_details && (
+            <div className="recommendation-details">
+              <div className="recommendation-breakdown">
+                {Object.entries(item.score_details.feature_importance || {}).map(([feature, value]) => (
+                  <div key={feature} className="feature-importance-bar">
+                    <span className="feature-label">{feature.replace(/_/g, ' ')}</span>
+                    <div className="feature-bar-container">
+                      <div 
+                        className="feature-bar" 
+                        style={{ width: `${Math.min(100, Math.round(value))}%` }}
+                      />
+                      <span className="feature-value">{Math.round(value)}%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       )}
       
       <div className="content-rating">
@@ -326,6 +484,22 @@ const ContentCard = ({ item, showReason = false }) => {
         >
           👎 <span className="rating-count">{ratingCount.down}</span>
         </button>
+        <button 
+          className={`bookmark-button ${isBookmarked ? 'active' : ''}`}
+          onClick={handleBookmark}
+          aria-label={isBookmarked ? "Remove bookmark" : "Bookmark this content"}
+        >
+          {isBookmarked ? '🔖 Saved' : '🔖 Save'}
+        </button>
+        
+        <Link 
+          to={`/article/${getItemId()}`} 
+          className="details-link"
+          aria-label="View details"
+          onClick={(e) => e.stopPropagation()}
+        >
+          View Details
+        </Link>
       </div>
       
     </div>

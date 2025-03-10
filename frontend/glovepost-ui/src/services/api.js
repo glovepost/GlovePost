@@ -30,6 +30,9 @@ export const contentApi = {
   getByCategory: (category, limit = 30) => 
     apiClient.get(`/content/category/${category}?limit=${limit}`),
   
+  // Get a single article by ID
+  getArticle: (id) => apiClient.get(`/content/${id}`),
+  
   // Search content with optional limit
   search: (query, limit = 30) => 
     apiClient.get(`/content/search?q=${encodeURIComponent(query)}&limit=${limit}`),
@@ -84,7 +87,18 @@ export const userApi = {
 // Recommendations API
 export const recommendationsApi = {
   // Get recommendations for user
-  getForUser: (userId) => apiClient.get(`/recommendations/${userId}`),
+  getForUser: (userId, useML = false, verbose = true) => {
+    const params = new URLSearchParams();
+    if (useML) params.append('ml', 'true');
+    if (verbose) params.append('verbose', 'true');
+    return apiClient.get(`/recommendations/${userId}${params.toString() ? `?${params.toString()}` : ''}`);
+  },
+    
+  // Train ML recommendation model
+  trainModel: () => apiClient.post('/recommendations/train'),
+  
+  // Get ML training data status
+  getTrainingStatus: (userId) => apiClient.get(`/recommendations/training-status/${userId}`),
 };
 
 // Interactions API

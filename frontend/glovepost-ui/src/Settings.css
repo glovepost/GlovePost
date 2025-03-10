@@ -250,10 +250,217 @@
   background-color: #c0392b;
 }
 
+/* ML training button */
+.train-button {
+  background-color: #8e44ad;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  margin-top: 15px;
+  margin-left: 28px;
+}
+
+.train-button:hover {
+  background-color: #9b59b6;
+}
+
 .save-button:disabled,
-.clear-button:disabled {
+.clear-button:disabled,
+.train-button:disabled {
   background-color: #bdc3c7;
   cursor: not-allowed;
+}
+
+/* Disabled ML recommendations */
+.consent-label.disabled {
+  color: #999;
+  cursor: not-allowed;
+}
+
+.ml-disabled-text {
+  font-weight: normal;
+  font-size: 0.85rem;
+  color: #888;
+  margin-left: 8px;
+  font-style: italic;
+}
+
+/* Training status and progress bars */
+.training-status {
+  background-color: #fff;
+  border-radius: 6px;
+  padding: 15px;
+  margin: 15px 0;
+  border: 1px solid #eee;
+}
+
+.training-status h4 {
+  margin-top: 0;
+  margin-bottom: 15px;
+  font-size: 1rem;
+  color: #2c3e50;
+}
+
+.training-metric {
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+}
+
+.metric-label {
+  flex: 0 0 150px;
+  font-size: 0.9rem;
+  color: #555;
+}
+
+.progress-container {
+  flex: 1;
+  height: 20px;
+  background-color: #eee;
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-bar {
+  height: 100%;
+  background-color: #3498db;
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8rem;
+  color: #333;
+  text-shadow: 0 0 2px rgba(255, 255, 255, 0.8);
+}
+
+/* Quality levels */
+.quality-bar.quality-none {
+  background-color: #eee;
+}
+
+.quality-bar.quality-very-poor {
+  background-color: #e74c3c;
+}
+
+.quality-bar.quality-poor {
+  background-color: #e67e22;
+}
+
+.quality-bar.quality-fair {
+  background-color: #f1c40f;
+}
+
+.quality-bar.quality-good {
+  background-color: #2ecc71;
+}
+
+.quality-bar.quality-excellent {
+  background-color: #27ae60;
+}
+
+/* ML Model Visualization */
+.ml-visualization {
+  margin-top: 20px;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 15px;
+  background-color: #fff;
+}
+
+.ml-visualization h4 {
+  font-size: 0.95rem;
+  margin: 0 0 15px 0;
+  color: #2c3e50;
+}
+
+.ml-factors {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ml-factor {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.ml-factor-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ml-factor-name {
+  font-weight: 500;
+  font-size: 0.9rem;
+  text-transform: capitalize;
+  color: #34495e;
+}
+
+.ml-factor-value {
+  font-size: 0.8rem;
+  font-weight: bold;
+  color: #3498db;
+}
+
+.ml-factor-bar-container {
+  height: 8px;
+  background-color: #f5f5f5;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.ml-factor-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+.ml-factor:nth-child(1) .ml-factor-bar {
+  background-color: #3498db;
+}
+
+.ml-factor:nth-child(2) .ml-factor-bar {
+  background-color: #1abc9c;
+}
+
+.ml-factor:nth-child(3) .ml-factor-bar {
+  background-color: #9b59b6;
+}
+
+.ml-factor:nth-child(4) .ml-factor-bar {
+  background-color: #e74c3c;
+}
+
+.ml-model-info {
+  margin-top: 15px;
+  font-size: 0.8rem;
+  color: #7f8c8d;
+  background-color: #f8f9fa;
+  padding: 10px;
+  border-radius: 4px;
+  line-height: 1.5;
+}
+
+.training-tip {
+  font-size: 0.85rem;
+  font-style: italic;
+  color: #666;
+  margin: 10px 0 0 0;
 }
 
 /* Status messages */

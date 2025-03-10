@@ -5,7 +5,7 @@ A personalized content aggregator that fetches and curates content from various 
 ## Features
 
 - Content aggregation from RSS feeds, X/Twitter, and social media
-- Personalized content recommendations based on user preferences
+- Personalized content recommendations using machine learning (LightGBM)
 - User interaction tracking for improved recommendations
 - Privacy controls for user data
 - Clean, responsive user interface
@@ -15,7 +15,7 @@ A personalized content aggregator that fetches and curates content from various 
 - **Backend**: Node.js, Express
 - **Frontend**: React.js
 - **Databases**: MongoDB (content storage), PostgreSQL (user data)
-- **Recommendation Engine**: Python
+- **Recommendation Engine**: Python with LightGBM (Machine Learning)
 
 ## Prerequisites
 
@@ -57,18 +57,24 @@ MONGO_URI=mongodb://localhost:27017/glovepost
 PG_URI=postgres://user:password@localhost:5432/glovepost
 ```
 
-5. **Run the setup script**
+5. **Run the setup scripts**
 
 ```bash
+# General setup
 cd scripts
 chmod +x run_setup.sh
 ./run_setup.sh
+
+# Set up ML environment (optional)
+chmod +x setup_ml_env.sh
+./setup_ml_env.sh
 ```
 
-This script will:
+These scripts will:
 - Create necessary database tables
 - Set up Python environment
 - Fetch initial content
+- Set up the machine learning environment (if running setup_ml_env.sh)
 
 ## Running the Application
 
@@ -106,7 +112,14 @@ Open your browser and navigate to http://localhost:3001
 ### Python Scripts
 
 - `scripts/content_aggregator.py` - Fetches content from sources
-- `scripts/recommendation_engine.py` - Generates personalized recommendations
+- `scripts/refresh_content.py` - Multithreaded content scraping system
+- `scripts/recommendation_engine.py` - Generates basic personalized recommendations
+- `scripts/ml_recommendation_engine.py` - Machine learning-based recommendation system
+- `scripts/test_ml_recommendation.py` - Unit tests for the ML recommendation engine
+
+For more details on the ML recommendation system, see [ML_RECOMMENDATIONS.md](scripts/ML_RECOMMENDATIONS.md)
+
+For more details on the multithreaded scraper, see [SCRAPER_README.md](scripts/SCRAPER_README.md)
 
 ## API Endpoints
 
@@ -123,6 +136,8 @@ Open your browser and navigate to http://localhost:3001
 ### Recommendations
 
 - `GET /recommendations/:userId` - Get personalized recommendations
+  - Add `?ml=true` query parameter to use the ML-based engine
+- `POST /recommendations/train` - Train the ML recommendation model
 
 ### Interactions
 

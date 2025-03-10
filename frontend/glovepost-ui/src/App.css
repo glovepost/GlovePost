@@ -29,6 +29,12 @@ body {
   height: 70px;
   box-shadow: 0 2px 5px var(--color-card-shadow);
   transition: var(--transition-theme);
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  z-index: 1000;
 }
 
 .logo {
@@ -65,10 +71,20 @@ body {
   text-decoration: none;
   font-weight: bold;
   transition: color 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .nav-links a:hover {
   color: var(--color-accent-primary);
+}
+
+.bookmark-icon {
+  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* Theme Toggle Button */
@@ -104,6 +120,7 @@ body {
   margin: 0 auto;
   width: 100%;
   transition: var(--transition-theme);
+  padding-top: 90px; /* Provide space for the fixed navbar (70px height + 20px padding) */
 }
 
 /* Loading */
@@ -153,6 +170,7 @@ body {
   
   .main-content {
     padding: 15px 10px;
+    padding-top: 120px; /* Adjusted for taller navbar in mobile view */
   }
   
   .footer {
@@ -181,6 +199,7 @@ body {
   
   .main-content {
     padding: 10px 5px;
+    padding-top: 110px; /* Adjusted for smaller navbar on small phones */
   }
   
   .footer {

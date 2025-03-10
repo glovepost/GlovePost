@@ -1,0 +1,323 @@
+.article-page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 20px;
+  color: var(--text-color);
+}
+
+.back-link {
+  display: inline-block;
+  margin-bottom: 20px;
+  color: var(--primary-color);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.back-link:hover {
+  text-decoration: underline;
+}
+
+.article-content {
+  background-color: var(--card-bg-color);
+  border-radius: 8px;
+  padding: 25px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: 30px;
+  position: relative;
+}
+
+.article-content::before {
+  content: '';
+  position: absolute;
+  top: 15px;
+  left: 15px;
+  width: 30px;
+  height: 30px;
+  background-color: var(--primary-light-color);
+  mask-image: url('../public/icons/glove.svg');
+  -webkit-mask-image: url('../public/icons/glove.svg');
+  mask-size: contain;
+  -webkit-mask-size: contain;
+  mask-repeat: no-repeat;
+  -webkit-mask-repeat: no-repeat;
+  opacity: 0.2;
+}
+
+.article-category {
+  display: inline-block;
+  background-color: var(--primary-light-color);
+  color: var(--primary-color);
+  border-radius: 16px;
+  padding: 5px 12px;
+  font-size: 0.85rem;
+  font-weight: 500;
+  margin-bottom: 15px;
+}
+
+/* Custom category colors */
+.article-category[data-category="Technology"] {
+  background-color: rgba(25, 118, 210, 0.1);
+  color: #1976d2;
+}
+
+.article-category[data-category="News"] {
+  background-color: rgba(211, 47, 47, 0.1);
+  color: #d32f2f;
+}
+
+.article-category[data-category="Sports"] {
+  background-color: rgba(46, 125, 50, 0.1);
+  color: #2e7d32;
+}
+
+.article-category[data-category="Entertainment"] {
+  background-color: rgba(156, 39, 176, 0.1);
+  color: #9c27b0;
+}
+
+.article-category[data-category="Science"] {
+  background-color: rgba(0, 137, 123, 0.1);
+  color: #00897b;
+}
+
+.article-title {
+  font-size: 2rem;
+  margin: 10px 0 15px;
+  line-height: 1.3;
+}
+
+.article-meta {
+  display: flex;
+  align-items: center;
+  margin-bottom: 20px;
+  font-size: 0.9rem;
+  color: var(--text-secondary-color);
+}
+
+.article-source {
+  font-weight: 500;
+  margin-right: 15px;
+}
+
+.article-date {
+  opacity: 0.8;
+}
+
+.article-actions {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 25px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.rating-button, .bookmark-button, .source-link {
+  background: none;
+  border: 1px solid var(--border-color);
+  border-radius: 20px;
+  padding: 6px 12px;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  color: var(--text-color);
+}
+
+.rating-button:hover, .bookmark-button:hover, .source-link:hover {
+  background-color: var(--hover-color);
+}
+
+.rating-button.active, .bookmark-button.active {
+  background-color: var(--primary-light-color);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+}
+
+.thumbs-up.active {
+  background-color: rgba(46, 125, 50, 0.1);
+  border-color: #2e7d32;
+  color: #2e7d32;
+}
+
+.thumbs-down.active {
+  background-color: rgba(211, 47, 47, 0.1);
+  border-color: #d32f2f;
+  color: #d32f2f;
+}
+
+.rating-count {
+  font-size: 0.85rem;
+}
+
+.source-link {
+  text-decoration: none;
+  font-weight: 500;
+  margin-left: auto;
+}
+
+.article-summary {
+  margin-bottom: 30px;
+}
+
+.article-summary h2, .article-full-content h2 {
+  font-size: 1.5rem;
+  margin-bottom: 15px;
+  color: var(--text-color);
+}
+
+.article-summary p {
+  line-height: 1.6;
+  font-size: 1.1rem;
+}
+
+.article-full-content {
+  line-height: 1.7;
+  font-size: 1.1rem;
+}
+
+/* Comments Section */
+.article-comments {
+  background-color: var(--card-bg-color);
+  border-radius: 8px;
+  padding: 25px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.article-comments h2 {
+  font-size: 1.5rem;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.comment-form {
+  margin-bottom: 30px;
+}
+
+.comment-form textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-size: 1rem;
+  background-color: var(--input-bg-color);
+  color: var(--text-color);
+  resize: vertical;
+  transition: border-color 0.3s;
+  margin-bottom: 10px;
+}
+
+.comment-form textarea:focus {
+  border-color: var(--primary-color);
+  outline: none;
+}
+
+.comment-form button {
+  background-color: var(--primary-color);
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 16px;
+  font-size: 0.95rem;
+  cursor: pointer;
+  transition: background-color 0.3s;
+}
+
+.comment-form button:hover {
+  background-color: var(--primary-dark-color);
+}
+
+.comment-form button:disabled {
+  background-color: var(--disabled-color);
+  cursor: not-allowed;
+}
+
+.login-prompt {
+  margin-bottom: 30px;
+  text-align: center;
+  padding: 15px;
+  background-color: var(--hover-color);
+  border-radius: 4px;
+}
+
+.login-prompt a {
+  color: var(--primary-color);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.login-prompt a:hover {
+  text-decoration: underline;
+}
+
+.comments-list {
+  margin-top: 20px;
+}
+
+.comment {
+  margin-bottom: 25px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.comment:last-child {
+  border-bottom: none;
+}
+
+.comment-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.comment-author {
+  font-weight: 700;
+  color: var(--primary-color);
+}
+
+.comment-time {
+  font-size: 0.85rem;
+  color: var(--text-secondary-color);
+}
+
+.comment-text {
+  line-height: 1.5;
+}
+
+.no-comments {
+  text-align: center;
+  padding: 20px;
+  color: var(--text-secondary-color);
+}
+
+/* Loading and Error States */
+.article-page.loading,
+.article-page.error,
+.article-page.not-found {
+  text-align: center;
+  padding: 50px 0;
+  font-size: 1.2rem;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .article-page {
+    padding: 15px;
+  }
+  
+  .article-title {
+    font-size: 1.5rem;
+  }
+  
+  .article-actions {
+    flex-wrap: wrap;
+  }
+  
+  .source-link {
+    margin-left: 0;
+    margin-top: 10px;
+  }
+}

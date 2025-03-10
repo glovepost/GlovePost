@@ -2,7 +2,7 @@
   border: 1px solid var(--color-border);
   border-radius: 8px;
   padding: 20px;
-  margin-bottom: 20px;
+  margin-bottom: 10px; /* Reduced from 20px to 10px (50% reduction) */
   background-color: var(--color-bg-secondary);
   box-shadow: 0 2px 5px var(--color-card-shadow);
   transition: transform 0.3s ease, box-shadow 0.3s ease;
@@ -64,6 +64,7 @@
   padding: 3px 8px;
   border-radius: 10px;
   margin-bottom: 10px;
+  margin-right: 70px; /* Make space for the ML indicator */
   position: relative;
   z-index: 2;
 }
@@ -124,13 +125,138 @@
   z-index: 2;
 }
 
+.recommendation-details {
+  margin-top: 10px;
+  font-style: normal;
+}
+
+.recommendation-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.feature-importance-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.feature-label {
+  font-size: 0.75rem;
+  text-transform: capitalize;
+  color: var(--color-text-primary);
+  font-weight: 500;
+}
+
+.feature-bar-container {
+  height: 8px;
+  width: 100%;
+  background-color: var(--color-bg-primary);
+  border-radius: 4px;
+  position: relative;
+  overflow: hidden;
+}
+
+.feature-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease-in-out;
+}
+
+/* Specific colors for different features */
+.feature-importance-bar:nth-child(1) .feature-bar {
+  background-color: var(--color-accent-primary);
+}
+
+.feature-importance-bar:nth-child(2) .feature-bar {
+  background-color: #1abc9c; /* Turquoise */
+}
+
+.feature-importance-bar:nth-child(3) .feature-bar {
+  background-color: #9b59b6; /* Purple */
+}
+
+.feature-importance-bar:nth-child(4) .feature-bar {
+  background-color: #e74c3c; /* Red */
+}
+
+.feature-value {
+  position: absolute;
+  right: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.7rem;
+  color: var(--color-text-secondary);
+  font-weight: bold;
+}
+
+.content-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 10px 0;
+  position: relative;
+  z-index: 2;
+}
+
 .content-rating {
   display: flex;
   align-items: center;
   gap: 15px;
-  margin: 10px 0;
   position: relative;
   z-index: 2;
+  flex-wrap: wrap;
+}
+
+.content-link {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+  position: relative;
+  z-index: 2;
+}
+
+.details-link {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background-color: var(--color-accent-primary-bg);
+  border: 1px solid var(--color-accent-primary);
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  color: var(--color-accent-primary);
+  transition: all 0.2s;
+  text-decoration: none;
+  margin-left: auto;
+}
+
+.details-link:hover {
+  background-color: var(--color-accent-primary);
+  color: white;
+}
+
+.bookmark-button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background-color: transparent;
+  border: 1px solid var(--color-divider);
+  border-radius: 20px;
+  padding: 4px 10px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  color: var(--color-text-secondary);
+  transition: all 0.2s;
+}
+
+.bookmark-button:hover,
+.bookmark-button.active {
+  background-color: var(--color-accent-secondary-bg);
+  border-color: var(--color-accent-secondary);
+  color: var(--color-accent-secondary);
 }
 
 .rating-button {
@@ -164,6 +290,36 @@
 .rating-count {
   font-size: 0.8rem;
   font-weight: bold;
+}
+
+/* ML training animation */
+@keyframes pulse {
+  0% { opacity: 0.7; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.05); }
+  100% { opacity: 0.7; transform: scale(1); }
+}
+
+.ml-training-indicator {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  font-size: 0.7rem;
+  background-color: rgba(52, 152, 219, 0.1);
+  color: #3498db;
+  padding: 4px 8px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  animation: pulse 1.5s ease-in-out infinite;
+  z-index: 10;
+}
+
+.ml-training-indicator-dot {
+  width: 6px;
+  height: 6px;
+  background-color: #3498db;
+  border-radius: 50%;
 }
 
 /* Removed footer, read-more-link, and action-button styles */

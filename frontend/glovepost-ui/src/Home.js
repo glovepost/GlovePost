@@ -1,9 +1,18 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import ContentCard from './components/ContentCard';
 import { contentApi, recommendationsApi, userApi } from './services/api';
 import { useAuth } from './contexts/AuthContext';
 import './Home.css';
 // Using CSS-based approach rather than SVG imports
+
+// Debounce function to limit API calls during search
+const debounce = (func, delay) => {
+  let timeout;
+  return (...args) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), delay);
+  };
+};
 
 const Home = () => {
   const { currentUser } = useAuth();
@@ -17,6 +26,42 @@ const Home = () => {
   const [userPreferences, setUserPreferences] = useState({});
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [dislikedContent, setDislikedContent] = useState(new Set());
+  
+  // Search functionality
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchMode, setSearchMode] = useState(false);
+
+  // Search content handler
+  const performSearch = useCallback(async (query) => {
+    if (!query || query.trim().length < 2) {
+      setSearchResults([]);
+      setSearchMode(false);
+      return;
+    }
+    
+    try {
+      setIsSearching(true);
+      const response = await contentApi.search(query);
+      setSearchResults(response.data);
+      setSearchMode(true);
+    } catch (error) {
+      console.error('Error searching content:', error);
+      setError('Failed to search content. Please try again.');
+    } finally {
+      setIsSearching(false);
+    }
+  }, []);
+  
+  // Create debounced search function
+  const debouncedSearch = useCallback(debounce(performSearch, 500), [performSearch]);
+  
+  // Handle search input changes
+  useEffect(() => {
+    debouncedSearch(searchQuery);
+  }, [searchQuery, debouncedSearch]);
 
   // Fetch user preferences
   useEffect(() => {
@@ -28,7 +73,7 @@ const Home = () => {
       }
       
       try {
-        const response = await userApi.getCurrentUser();
+        const response = await userApi.getUser(currentUser.id);
         setUserPreferences(response.data.preferences || {});
       } catch (err) {
         console.error('Error fetching user preferences:', err);
@@ -99,6 +144,14 @@ const Home = () => {
     
     let filtered = [...latestContent];
     
+    // Remove disliked content
+    if (dislikedContent.size > 0) {
+      filtered = filtered.filter(item => {
+        const itemId = getItemId(item);
+        return !dislikedContent.has(itemId);
+      });
+    }
+    
     // Apply category filter if not 'all'
     if (selectedCategory !== 'all') {
       filtered = filtered.filter(item => item.category === selectedCategory);
@@ -126,25 +179,64 @@ const Home = () => {
     }
     
     setFilteredContent(filtered);
-  }, [latestContent, userPreferences, selectedCategory]);
+  }, [latestContent, userPreferences, selectedCategory, dislikedContent]);
+  
+  // Helper function to get item ID consistently
+  const getItemId = (item) => {
+    if (!item) return '';
+    
+    if (typeof item._id === 'string') {
+      return item._id;
+    }
+    if (item._id && item._id.$oid) {
+      return item._id.$oid;
+    }
+    if (item._id && typeof item._id.toString === 'function') {
+      return item._id.toString();
+    }
+    return `${item.title || ''}-${item.source || ''}`;
+  };
   
   // Fetch personalized recommendations
   useEffect(() => {
     const fetchRecommendations = async () => {
-      // Only fetch recommendations if logged in
-      if (!currentUser) {
+      // Only fetch recommendations if logged in and we have a user ID
+      if (!currentUser || !currentUser.id) {
         setRecommendations([]);
         return;
       }
       
       try {
-        const response = await recommendationsApi.getForUser(currentUser.id);
+        // Check if user has ML recommendations enabled
+        const useML = userPreferences?.use_ml_recommendations === true;
+        
+        // Log recommendation type for debugging
+        console.log(`Fetching ${useML ? 'ML' : 'standard'} recommendations for user ${currentUser.id}`);
+        
+        // Call API with ML flag if user has enabled it
+        const response = await recommendationsApi.getForUser(currentUser.id, useML);
+        
+        if (!response.data || !Array.isArray(response.data)) {
+          console.error('Invalid recommendations response:', response.data);
+          setRecommendations([]);
+          return;
+        }
         
         // Extract content items from recommendations
-        const recommendedItems = response.data.map(rec => ({
-          ...rec.content,
-          reason: rec.reason
-        }));
+        const recommendedItems = response.data.map(rec => {
+          if (!rec || !rec.content) {
+            console.warn('Invalid recommendation item:', rec);
+            return null;
+          }
+          return {
+            ...rec.content,
+            reason: rec.reason,
+            score_details: rec.score_details // Include score details if they exist
+          };
+        })
+        .filter(item => item !== null)
+        // Filter out disliked items from recommendations too
+        .filter(item => !dislikedContent.has(getItemId(item)));
         
         setRecommendations(recommendedItems);
       } catch (err) {
@@ -158,7 +250,7 @@ const Home = () => {
     if (activeTab === 'for-you') {
       fetchRecommendations();
     }
-  }, [activeTab, currentUser]);
+  }, [activeTab, currentUser, userPreferences?.use_ml_recommendations, dislikedContent]);
   
   // Get the currently active content list
   const activeContent = activeTab === 'latest' ? filteredContent : recommendations;
@@ -168,6 +260,15 @@ const Home = () => {
     setActiveTab(tab);
   };
   
+  // Handle a user disliking content
+  const handleDislikeContent = (contentId) => {
+    setDislikedContent(prev => {
+      const newSet = new Set(prev);
+      newSet.add(contentId);
+      return newSet;
+    });
+  };
+
   // Handle category filter change
   const handleCategoryChange = async (category) => {
     setSelectedCategory(category);
@@ -204,21 +305,6 @@ const Home = () => {
   return (
     <div className="home-container">
       <div className="hero-section">
-        {/* Decorative gloves */}
-        <div className="decorative-gloves" aria-hidden="true">
-          <div className="glove-icon" />
-          <div className="glove-icon" />
-          <div className="glove-icon" />
-          <div className="glove-icon" />
-          <div className="glove-icon" />
-        </div>
-        
-        <h1>
-          <div className="hero-icon" aria-hidden="true" />
-          GlovePost
-        </h1>
-        <p>Raising content above the digital clutter</p>
-        
         <div className="content-tabs">
           <button 
             className={`tab-button ${activeTab === 'latest' ? 'active' : ''}`}
@@ -238,22 +324,6 @@ const Home = () => {
           )}
         </div>
         
-        {/* Post visualization */}
-        {activeTab === 'latest' && categories.length > 0 && categories.length <= 5 && (
-          <div className="posts-row" aria-hidden="true">
-            {categories.slice(0, 5).map(category => (
-              <div 
-                key={category} 
-                className="post-item"
-                onClick={() => handleCategoryChange(category)}
-              >
-                <div className="post-icon" />
-                <span className="post-label">{category}</span>
-              </div>
-            ))}
-          </div>
-        )}
-        
         {activeTab === 'latest' && categories.length > 0 && (
           <div className="category-filter">
             <select 
@@ -271,6 +341,37 @@ const Home = () => {
             </select>
           </div>
         )}
+        
+        <div className="search-bar">
+          <input
+            type="text"
+            placeholder="Search content..."
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              if (!e.target.value.trim()) {
+                setSearchMode(false);
+              }
+            }}
+            className="search-input"
+            aria-label="Search content"
+          />
+          {isSearching && (
+            <div className="search-spinner" aria-hidden="true" />
+          )}
+          {searchQuery && !isSearching && (
+            <button 
+              className="clear-search" 
+              onClick={() => {
+                setSearchQuery('');
+                setSearchMode(false);
+              }}
+              aria-label="Clear search"
+            >
+              ✕
+            </button>
+          )}
+        </div>
       </div>
 
       {loading && (
@@ -286,7 +387,7 @@ const Home = () => {
         <div className="preference-info">
           <p>Content is sorted based on your preferences:</p>
           <div className="preference-list">
-            {Object.entries(userPreferences.weights)
+            {userPreferences?.weights && Object.entries(userPreferences.weights)
               .sort(([,a], [,b]) => b - a)
               .map(([category, weight]) => (
                 <span key={category} className="preference-tag">
@@ -299,40 +400,65 @@ const Home = () => {
         </div>
       )}
       
-      <div className="content-list">
-        {activeContent.map((item) => {
-          // Generate a reliable key for each item
-          const itemKey = 
-            // MongoDB ObjectId in string form
-            (typeof item._id === 'string' && item._id) ||
-            // MongoDB ObjectId in object form
-            (item._id && item._id.$oid) ||
-            // MongoDB ObjectId object with toString()
-            (item._id && typeof item._id.toString === 'function' && item._id.toString()) ||
-            // Fallback to title+source
-            (item.title && item.source && `${item.title}-${item.source}`) ||
-            // Last resort - generate a random key
-            `item-${Math.random().toString(36).substring(2, 15)}`;
-            
-          return (
-            <ContentCard 
-              key={itemKey}
-              item={item} 
-              showReason={activeTab === 'for-you'}
-            />
-          );
-        })}
-      </div>
-      
-      {activeContent.length === 0 && !loading && !error && (
-        <div className="no-content">
-          <div className="no-content-icon" aria-hidden="true" />
-          {activeTab === 'for-you' 
-            ? 'No personalized recommendations available yet. Try interacting with some content!' 
-            : selectedCategory !== 'all'
-              ? `No content available in the ${selectedCategory} category.`
-              : 'No content available at the moment. Please check back later.'}
+      {searchMode ? (
+        // Show search results
+        <div className="search-results">
+          <h2 className="section-title">
+            Search Results for "{searchQuery}" ({searchResults.length})
+          </h2>
+          
+          {searchResults.length === 0 && !isSearching ? (
+            <div className="no-content">
+              <div className="no-content-icon" aria-hidden="true" />
+              <p>No results found. Try different keywords.</p>
+            </div>
+          ) : (
+            <div className="content-list">
+              {searchResults.map((item) => {
+                // Generate a reliable key for each item
+                const itemKey = getItemId(item);
+                  
+                return (
+                  <ContentCard 
+                    key={itemKey}
+                    item={item} 
+                    onDislike={handleDislikeContent}
+                  />
+                );
+              })}
+            </div>
+          )}
         </div>
+      ) : (
+        // Show normal content
+        <>
+          <div className="content-list">
+            {activeContent.map((item) => {
+              // Generate a reliable key for each item
+              const itemKey = getItemId(item);
+                
+              return (
+                <ContentCard 
+                  key={itemKey}
+                  item={item} 
+                  showReason={activeTab === 'for-you'}
+                  onDislike={handleDislikeContent}
+                />
+              );
+            })}
+          </div>
+          
+          {activeContent.length === 0 && !loading && !error && (
+            <div className="no-content">
+              <div className="no-content-icon" aria-hidden="true" />
+              {activeTab === 'for-you' 
+                ? 'No personalized recommendations available yet. Try interacting with some content!' 
+                : selectedCategory !== 'all'
+                  ? `No content available in the ${selectedCategory} category.`
+                  : 'No content available at the moment. Please check back later.'}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
