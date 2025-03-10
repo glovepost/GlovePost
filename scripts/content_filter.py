@@ -128,11 +128,15 @@ REPUTABLE_SOURCES = [
 ]
 
 # Initialize TF-IDF Vectorizer for duplicate detection
+tfidf_vectorizer = None
 if TfidfVectorizer and nltk:
-    stop_words = set(stopwords.words('english'))
-    tfidf_vectorizer = TfidfVectorizer(stop_words=list(stop_words), max_features=5000)
-else:
-    tfidf_vectorizer = None
+    try:
+        stop_words = set(stopwords.words('english'))
+        tfidf_vectorizer = TfidfVectorizer(stop_words=list(stop_words), max_features=5000)
+        logger.info("TF-IDF vectorizer initialized successfully")
+    except Exception as e:
+        logger.error(f"Error initializing TF-IDF vectorizer: {e}")
+        tfidf_vectorizer = None
 
 def detect_duplicate(article: Dict, articles: List[Dict]) -> Tuple[bool, str, Dict]:
     """Detect duplicates using TF-IDF and cosine similarity."""
@@ -160,7 +164,9 @@ def detect_duplicate(article: Dict, articles: List[Dict]) -> Tuple[bool, str, Di
         return False, None, None
 
     try:
-        tfidf_matrix = tfidf_vectorizer.fit_transform(all_texts)
+        # Create a fresh vectorizer each time to avoid the "not fitted" error
+        local_vectorizer = TfidfVectorizer(stop_words=list(stopwords.words('english')), max_features=5000)
+        tfidf_matrix = local_vectorizer.fit_transform(all_texts)
         similarity_scores = cosine_similarity(tfidf_matrix[-1], tfidf_matrix[:-1])[0]
         
         max_similarity = similarity_scores.max() if similarity_scores.size > 0 else 0
@@ -169,6 +175,23 @@ def detect_duplicate(article: Dict, articles: List[Dict]) -> Tuple[bool, str, Di
             return True, f"Similar content (score: {max_similarity:.2f})", articles[match_idx]
     except Exception as e:
         logger.warning(f"Error in similarity detection: {e}")
+        # Use a fallback simple text comparison
+        try:
+            for existing in articles:
+                if existing.get('_id') != article.get('_id'):
+                    # Simple substring comparison
+                    article_text = f"{article.get('title', '')} {article.get('content_summary', '')}".lower()
+                    existing_text = f"{existing.get('title', '')} {existing.get('content_summary', '')}".lower()
+                    
+                    # Find largest common substring (simplified approach)
+                    smaller = article_text if len(article_text) < len(existing_text) else existing_text
+                    larger = existing_text if len(article_text) < len(existing_text) else article_text
+                    
+                    # If more than 50% of the smaller text appears in the larger one
+                    if len(smaller) > 100 and smaller in larger:
+                        return True, "Text largely contained in another article", existing
+        except Exception as inner_e:
+            logger.warning(f"Error in fallback similarity detection: {inner_e}")
         
     return False, None, None
 
@@ -268,6 +291,36 @@ def clean_article_content(article: Dict) -> Tuple[str, List[str]]:
 
     modifications = []
     
+    # Strip HTML tags if present
+    if '<' in content and '>' in content:
+        # Simple HTML stripping
+        original_length = len(content)
+        content = re.sub(r'<[^>]+>', ' ', content)
+        content = re.sub(r'\s+', ' ', content).strip()
+        
+        # Replace common HTML entities
+        html_entities = {
+            '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'",
+            '&nbsp;': ' ', '&copy;': '©', '&reg;': '®', '&trade;': '™',
+            '&eacute;': 'é', '&Eacute;': 'É', '&egrave;': 'è', '&Egrave;': 'È',
+            '&agrave;': 'à', '&Agrave;': 'À', '&acirc;': 'â', '&Acirc;': 'Â',
+            '&icirc;': 'î', '&Icirc;': 'Î', '&oacute;': 'ó', '&Oacute;': 'Ó',
+            '&uacute;': 'ú', '&Uacute;': 'Ú', '&hellip;': '…', '&mdash;': '—',
+            '&ndash;': '–', '&lsquo;': ''', '&rsquo;': ''', '&ldquo;': '"',
+            '&rdquo;': '"', '&bull;': '•', '&middot;': '·'
+        }
+        
+        for entity, replacement in html_entities.items():
+            if entity in content:
+                content = content.replace(entity, replacement)
+                
+        # Remove source link if it exists
+        content = re.sub(r'Source\s*:?\s*https?://\S+', '', content, flags=re.IGNORECASE)
+        content = re.sub(r'Source$', '', content, flags=re.IGNORECASE)$', '', content, flags=re.IGNORECASE)
+                
+        if len(content) != original_length:
+            modifications.append("Removed HTML formatting")
+    
     # Remove noise phrases
     for phrase_list, label in [(AD_PHRASES, "ad"), (CLICKBAIT_PHRASES, "clickbait"), (FLUFF_PHRASES, "fluff")]:
         for phrase in phrase_list:
@@ -289,6 +342,9 @@ def clean_article_content(article: Dict) -> Tuple[str, List[str]]:
         return word.capitalize()
     
     content = re.sub(r'\b[A-Z]{4,}\b', _fix_caps, content)
+    
+    # Remove date patterns at the beginning of the content
+    content = re.sub(r'^\d{1,2}/\d{1,2}/\d{2,4}\s+', '', content)
     
     if modifications:
         modifications.append("Normalized text formatting")

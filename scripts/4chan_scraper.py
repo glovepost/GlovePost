@@ -33,11 +33,29 @@ from bs4 import BeautifulSoup
 from fake_useragent import UserAgent
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.FileHandler("../logs/4chan_scraper.log"), logging.StreamHandler()]
-)
+try:
+    # Create logs directory if it doesn't exist
+    logs_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'logs')
+    if not os.path.exists(logs_dir):
+        os.makedirs(logs_dir)
+        
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[
+            logging.FileHandler(os.path.join(logs_dir, "4chan_scraper.log")),
+            logging.StreamHandler(sys.stderr)  # Explicitly log to stderr
+        ]
+    )
+except Exception as e:
+    # Fallback to console-only logging if file logging fails
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[logging.StreamHandler(sys.stderr)]  # Explicitly log to stderr
+    )
+    print(f"Warning: Could not set up file logging: {e}")
+    
 logger = logging.getLogger("4chan_scraper")
 
 # Constants
@@ -286,10 +304,15 @@ def main() -> None:
                         help="Max threads per board")
     parser.add_argument("--output", type=str, default=None,
                         help="Output JSON file (optional)")
+    parser.add_argument("--debug", action="store_true",
+                        help="Run in debug mode with extra logging")
     
     args = parser.parse_args()
     boards = [b.strip() for b in args.boards.split(",") if b.strip()]
     os.makedirs("../logs", exist_ok=True)
+    
+    if args.debug:
+        logger.setLevel(logging.DEBUG)
     
     logger.info(f"Starting 4chan scraper for boards: {', '.join(boards)}")
     content = fetch_4chan_content(boards, args.limit)
@@ -297,8 +320,19 @@ def main() -> None:
     if args.output:
         save_to_json(content, args.output)
     
-    print(json.dumps(content))
-    logger.info(f"Scraping complete. Fetched {len(content)} content items")
+    # Ensure we're printing ONLY valid JSON to stdout
+    try:
+        # Use sys.stdout to print only the JSON data without any additional output
+        import sys
+        json_output = json.dumps(content)
+        # Verify the output is valid JSON before printing
+        json.loads(json_output)  # Validate
+        sys.stdout.write(json_output)
+        sys.stdout.flush()
+        logger.info(f"Scraping complete. Fetched {len(content)} content items")
+    except Exception as e:
+        logger.error(f"Error generating JSON output: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()

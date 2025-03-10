@@ -70,14 +70,15 @@ try:
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
             logging.FileHandler(os.path.join(logs_dir, "facebook_scraper.log")),
-            logging.StreamHandler()
+            logging.StreamHandler(sys.stderr)  # Explicitly log to stderr
         ]
     )
 except Exception as e:
     # Fallback to console-only logging if file logging fails
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[logging.StreamHandler(sys.stderr)]  # Explicitly log to stderr
     )
     print(f"Warning: Could not set up file logging: {e}")
 
@@ -85,21 +86,16 @@ logger = logging.getLogger("FacebookScraper")
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(description='Scrape public Facebook pages for content')
-parser.add_argument('--pages', nargs='+', default=[
-    'BBCNews',
-    'CNN',
-    'reuters',
-    'nytimes',
-    'TheGuardian',
-    'TechCrunch',
-    'TheEconomist',
-    'ESPN',
-    'NationalGeographic',
-    'WIRED'
-], help='Facebook page names to scrape')
+parser.add_argument('--pages', type=str, default='BBCNews,CNN,reuters,nytimes,TheGuardian,TechCrunch,TheEconomist,ESPN,NationalGeographic,WIRED',
+                   help='Comma-separated list of Facebook page names to scrape')
 parser.add_argument('--limit', type=int, default=10, help='Number of posts to retrieve per page')
 parser.add_argument('--dryrun', action='store_true', help='Run without saving to database')
 args = parser.parse_args()
+
+# Parse pages from comma-separated string to list
+if isinstance(args.pages, str):
+    args.pages = [page.strip() for page in args.pages.split(',') if page.strip()]
+    logger.info(f"Processing {len(args.pages)} page names from comma-separated list")
 
 # MongoDB collection
 content_collection = None
@@ -694,6 +690,19 @@ if __name__ == '__main__':
         content = fetch_facebook_content()
         end_time = time.time()
         
+        # Output JSON to stdout - IMPORTANT: Only output the JSON data, nothing else
+        try:
+            json_output = json.dumps(content)
+            # Validate JSON before outputting
+            json.loads(json_output)  # Test that it's valid JSON
+            # Print only the JSON output to stdout
+            sys.stdout.write(json_output)
+            sys.stdout.flush()
+        except Exception as e:
+            logger.error(f"Error serializing content to JSON: {e}")
+            sys.exit(1)
+            
+        # Log the summary information to stderr
         logger.info(f"Fetched {len(content)} Facebook posts in {end_time - start_time:.2f} seconds")
         
     except KeyboardInterrupt:

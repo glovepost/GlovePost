@@ -30,6 +30,7 @@ import logging
 import argparse
 import subprocess
 import threading
+import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List, Dict, Any, Optional, Callable
 
@@ -242,7 +243,7 @@ def clean_content(item: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     return content_object
 
 # Function to run a scraper script with retry logic
-def run_scraper_script(script_name: str, args_list: List[str], max_retries: int = 3) -> List[Dict[str, Any]]:
+def run_scraper_script(script_name: str, args_list: List[str], max_retries: int = 3, timeout: int = 300) -> List[Dict[str, Any]]:
     """
     Run a Python scraper script as a subprocess with retry logic.
     
@@ -250,6 +251,7 @@ def run_scraper_script(script_name: str, args_list: List[str], max_retries: int 
         script_name: Name of the scraper script (without .py)
         args_list: List of arguments to pass to the script
         max_retries: Maximum number of retry attempts
+        timeout: Maximum time to wait for subprocess to complete (in seconds)
         
     Returns:
         List of content items
@@ -263,49 +265,74 @@ def run_scraper_script(script_name: str, args_list: List[str], max_retries: int 
     venv_python = os.path.join(SCRIPT_DIR, 'venv', 'bin', 'python')
     python_exe = venv_python if os.path.exists(venv_python) else sys.executable
     
-    # Build the command
+    # Build the command with redirects - pipe stderr to /dev/null to suppress logs
     cmd = [python_exe, script_path] + args_list
     logger.info(f"Running command: {' '.join(cmd)}")
     
-    # Try running the command with retries
+    # Try running the command with retries, redirecting stderr to suppress logs
     for attempt in range(max_retries):
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            # Force stderr to be redirected to /dev/null to prevent log messages from interfering
+            with open(os.devnull, 'w') as devnull:
+                process = subprocess.Popen(
+                    cmd,
+                    stdout=subprocess.PIPE,
+                    stderr=devnull,
+                    text=True,
+                    universal_newlines=True
+                )
+                try:
+                    stdout, _ = process.communicate(timeout=timeout)
+                    
+                    if process.returncode != 0:
+                        raise subprocess.CalledProcessError(process.returncode, cmd)
+                        
+                except subprocess.TimeoutExpired:
+                    # Kill the process if it times out
+                    process.kill()
+                    logger.error(f"Subprocess {script_name} timed out after {timeout} seconds")
+                    if attempt < max_retries - 1:
+                        logger.info(f"Retrying {script_name} after timeout")
+                        time.sleep(2 ** attempt)  # Exponential backoff
+                        continue
+                    else:
+                        logger.error(f"Failed to run {script_name} after {max_retries} attempts due to timeouts")
+                        return []
             
-            # Extract the JSON part of the output by finding last occurrence of [
-            stdout = result.stdout
-            json_start = stdout.rfind('[')
-            if json_start == -1:
-                raise ValueError("No JSON data found in output")
+            # Verify we have valid JSON by checking if it starts with [ and ends with ]
+            stdout = stdout.strip()
+            if not (stdout.startswith('[') and stdout.endswith(']')):
+                logger.warning(f"Output from {script_name} doesn't look like valid JSON: {stdout[:100]}...")
                 
-            # Find the matching closing bracket
-            json_data = stdout[json_start:]
-            
-            # Simple JSON extraction that handles nested arrays
-            bracket_count = 0
-            for i, char in enumerate(json_data):
-                if char == '[':
-                    bracket_count += 1
-                elif char == ']':
-                    bracket_count -= 1
-                    if bracket_count == 0:
-                        # Found the matching closing bracket
-                        json_data = json_data[:i+1]
-                        break
+                # Try to extract JSON from the output by finding first [ and last ]
+                start = stdout.find('[')
+                end = stdout.rfind(']')
+                
+                if start != -1 and end != -1 and start < end:
+                    stdout = stdout[start:end+1]
+                else:
+                    if attempt < max_retries - 1:
+                        logger.warning(f"Retrying {script_name}, attempt {attempt+1}")
+                        time.sleep(2 ** attempt)  # Exponential backoff
+                        continue
+                    else:
+                        logger.error(f"Could not extract valid JSON after {max_retries} attempts")
+                        return []
             
             try:
-                content = json.loads(json_data)
+                content = json.loads(stdout)
                 logger.info(f"Fetched {len(content)} items from {script_name}")
                 return content
             except json.JSONDecodeError as e:
-                logger.error(f"Failed to parse JSON from {script_name}: {e}, Data: {json_data[:100]}...")
                 if attempt < max_retries - 1:
+                    logger.error(f"JSON parse error from {script_name}: {e}, retrying...")
                     time.sleep(2 ** attempt)  # Exponential backoff
                 else:
+                    logger.error(f"Failed to parse JSON from {script_name} after {max_retries} attempts: {e}")
                     return []
-                    
+                
         except subprocess.CalledProcessError as e:
-            logger.error(f"Command failed with exit code {e.returncode}: {e.stderr}")
+            logger.error(f"Command failed with exit code {e.returncode}")
             if attempt < max_retries - 1:
                 time.sleep(2 ** attempt)  # Exponential backoff
             else:
@@ -422,9 +449,10 @@ def fetch_reddit_content(config: Dict[str, Any], limit: int = 50) -> List[Dict[s
     # Convert list to comma-separated string
     subreddits_str = ','.join(subreddits)
     
-    # Run the scraper script
+    # Run the scraper script with a timeout
     args_list = ['--subreddits', subreddits_str, '--limit', str(limit)]
-    content = run_scraper_script('reddit_scraper', args_list)
+    timeout = 300  # 5 minutes timeout for Reddit scraper
+    content = run_scraper_script('reddit_scraper', args_list, timeout=timeout)
     
     # Standardize field names
     standardized_content = []
@@ -465,9 +493,10 @@ def fetch_4chan_content(config: Dict[str, Any], limit: int = 30) -> List[Dict[st
     # Convert list to comma-separated string
     boards_str = ','.join(boards)
     
-    # Run the scraper script
+    # Run the scraper script with a timeout
     args_list = ['--boards', boards_str, '--limit', str(limit)]
-    content = run_scraper_script('4chan_scraper', args_list)
+    timeout = 300  # 5 minutes timeout for 4chan scraper
+    content = run_scraper_script('4chan_scraper', args_list, timeout=timeout)
     
     # Standardize field names
     standardized_content = []
@@ -508,9 +537,10 @@ def fetch_twitter_content(config: Dict[str, Any], limit: int = 10) -> List[Dict[
     # Convert list to comma-separated string
     accounts_str = ','.join(accounts)
     
-    # Run the scraper script
+    # Run the scraper script with a timeout
     args_list = ['--accounts', accounts_str, '--limit', str(limit)]
-    content = run_scraper_script('twitter_scraper', args_list)
+    timeout = 300  # 5 minutes timeout for Twitter scraper
+    content = run_scraper_script('twitter_scraper', args_list, timeout=timeout)
     
     # Standardize field names
     standardized_content = []
@@ -551,9 +581,10 @@ def fetch_facebook_content(config: Dict[str, Any], limit: int = 10) -> List[Dict
     # Convert list to comma-separated string
     pages_str = ','.join(pages)
     
-    # Run the scraper script
+    # Run the scraper script with a timeout
     args_list = ['--pages', pages_str, '--limit', str(limit)]
-    content = run_scraper_script('facebook_scraper', args_list)
+    timeout = 300  # 5 minutes timeout for Facebook scraper
+    content = run_scraper_script('facebook_scraper', args_list, timeout=timeout)
     
     # Standardize field names
     standardized_content = []
@@ -596,7 +627,8 @@ def fetch_youtube_content(config: Dict[str, Any], limit: int = 10) -> List[Dict[
     
     # Run the scraper script - note YouTube scraper doesn't support limit parameter
     args_list = ['--channels', channels_str, '--workers', str(min(args.workers, 4))]
-    content = run_scraper_script('youtube_scraper', args_list)
+    timeout = 300  # 5 minutes timeout for YouTube scraper
+    content = run_scraper_script('youtube_scraper', args_list, timeout=timeout)
     
     # Standardize field names
     standardized_content = []
@@ -630,6 +662,16 @@ def fetch_content_from_sources(sources: List[str], config: Dict[str, Any], limit
     """
     logger.info(f"Fetching content from sources: {', '.join(sources)}")
     
+    # Define timeouts for each source type (in seconds)
+    source_timeouts = {
+        'rss': 180,       # 3 minutes
+        'twitter': 300,   # 5 minutes
+        'facebook': 300,  # 5 minutes
+        'reddit': 300,    # 5 minutes
+        '4chan': 300,     # 5 minutes
+        'youtube': 300    # 5 minutes
+    }
+    
     # Define fetcher functions for each source type
     fetchers = {
         'rss': lambda: fetch_rss_feeds(config.get('rss', []), limit),
@@ -654,12 +696,20 @@ def fetch_content_from_sources(sources: List[str], config: Dict[str, Any], limit
             else:
                 logger.warning(f"Unknown source type: {source}")
         
-        # Process results as they complete
+        # Process results as they complete with timeouts
         for future, source in futures:
             try:
-                source_results = future.result()
+                # Get the appropriate timeout for this source type
+                timeout = source_timeouts.get(source, 300)  # Default 5 minutes
+                logger.info(f"Waiting up to {timeout} seconds for {source} to complete")
+                
+                source_results = future.result(timeout=timeout)
                 logger.info(f"Completed fetching {len(source_results)} items from {source}")
                 results.extend(source_results)
+            except concurrent.futures.TimeoutError:
+                logger.error(f"Timeout waiting for {source} after {source_timeouts.get(source, 300)} seconds")
+                # Try to cancel the future if possible
+                future.cancel()
             except Exception as e:
                 logger.error(f"Error fetching from {source}: {str(e)}")
     

@@ -70,14 +70,15 @@ try:
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
             logging.FileHandler(os.path.join(logs_dir, "twitter_scraper.log")),
-            logging.StreamHandler()
+            logging.StreamHandler(sys.stderr)  # Explicitly log to stderr
         ]
     )
 except Exception as e:
     # Fallback to console-only logging if file logging fails
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[logging.StreamHandler(sys.stderr)]  # Explicitly log to stderr
     )
     print(f"Warning: Could not set up file logging: {e}")
 
@@ -85,21 +86,16 @@ logger = logging.getLogger("TwitterScraper")
 
 # Parse command line arguments
 parser = argparse.ArgumentParser(description='Scrape public Twitter/X profiles for content')
-parser.add_argument('--accounts', nargs='+', default=[
-    'BBCWorld',
-    'CNN',
-    'Reuters',
-    'nytimes',
-    'guardian',
-    'techcrunch',
-    'TheEconomist',
-    'espn',
-    'NatGeo',
-    'WIRED'
-], help='Twitter account usernames to scrape')
+parser.add_argument('--accounts', type=str, default='BBCWorld,CNN,Reuters,nytimes,guardian,techcrunch,TheEconomist,espn,NatGeo,WIRED',
+                   help='Comma-separated list of Twitter account usernames to scrape')
 parser.add_argument('--limit', type=int, default=10, help='Number of tweets to retrieve per account')
 parser.add_argument('--dryrun', action='store_true', help='Run without saving to database')
 args = parser.parse_args()
+
+# Parse accounts from comma-separated string to list
+if isinstance(args.accounts, str):
+    args.accounts = [account.strip() for account in args.accounts.split(',') if account.strip()]
+    logger.info(f"Processing {len(args.accounts)} Twitter accounts from comma-separated list")
 
 # MongoDB collection
 content_collection = None
@@ -613,6 +609,19 @@ if __name__ == '__main__':
         content = fetch_twitter_content()
         end_time = time.time()
         
+        # Output JSON to stdout - IMPORTANT: Only output the JSON data, nothing else
+        try:
+            json_output = json.dumps(content)
+            # Validate JSON before outputting
+            json.loads(json_output)  # Test that it's valid JSON
+            # Print only the JSON output to stdout
+            sys.stdout.write(json_output)
+            sys.stdout.flush()
+        except Exception as e:
+            logger.error(f"Error serializing content to JSON: {e}")
+            sys.exit(1)
+            
+        # Log the summary information to stderr
         logger.info(f"Fetched {len(content)} Twitter posts in {end_time - start_time:.2f} seconds")
         
     except KeyboardInterrupt:
