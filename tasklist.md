@@ -67,12 +67,12 @@
     - [ ] Use MongoDB text search or integrate ElasticSearch for advanced search capabilities
     - [ ] Index content fields like `title`, `content_summary`, and `category` for full-text search
 - **New Tasks (Script Improvements - `content_aggregator.py`):**
-  - [ ] Implement real X/Twitter scraping in `fetch_x_posts`
-    - [ ] Replace mock data with `beautifulsoup4` scraping using Nitter instances
-    - [ ] Add retry logic with fallback to mock data if scraping fails
-  - [ ] Implement real Facebook scraping in `fetch_facebook_posts`
-    - [ ] Replace mock data with `beautifulsoup4` scraping via `mbasic.facebook.com`
-    - [ ] Handle rate limits with proxy rotation or mock fallback
+  - [x] Implement real X/Twitter scraping in `fetch_x_posts`
+    - [x] Replace mock data with `beautifulsoup4` scraping using Nitter instances
+    - [x] Add retry logic with fallback to mock data if scraping fails
+  - [x] Implement real Facebook scraping in `fetch_facebook_posts`
+    - [x] Replace mock data with `beautifulsoup4` scraping via `mbasic.facebook.com`
+    - [x] Handle rate limits with proxy rotation or mock fallback
   - [ ] Enhance `categorize_content` with NLP
     - [ ] Replace keyword matching with NLP models (e.g., spaCy, NLTK) for context-aware categorization
     - [ ] Train on sample data from all sources
@@ -266,15 +266,12 @@
     - [x] Simplify card design by removing redundant elements
     - [x] Make entire card clickable to improve usability
   - **Pending:**
-  - [ ] Create detailed article view page
-    - [ ] Add `Article.js` component
-    - [ ] Route to `/article/:url` with full content display
 - **New Tasks (from Research):**
   - [x] Design the UI with the glove-on-post metaphor
     - [x] Use glove icons to represent articles and posts to represent categories
     - [x] Create visual elements where users can "pick up" gloves (articles) by clicking on them
-  - [ ] Implement a "Lost and Found" section for user-saved articles
-    - [ ] Allow users to save articles for later, inspired by finding lost gloves
+  - [x] Implement a "Lost and Found" section for user-saved articles
+    - [x] Allow users to save articles for later, inspired by finding lost gloves
 - **New Tasks (Thumbs Up/Down Mechanism):**
   - [x] Add thumbs up/thumbs down buttons to `ContentCard` component
     - [x] Include icons for thumbs-up/down
@@ -399,6 +396,31 @@
    - Implemented thread pools for improved efficiency
    - Added systemd service for automated startup and monitoring
    - Enhanced individual scrapers with parallel processing
+8. ✅ **Implement "Lost and Found" for saved articles** (COMPLETED)
+   - Added bookmarking functionality for users to save articles
+   - Created UI elements for accessing saved articles
+   - Implemented database storage for user bookmarks
+
+## Next Tasks to Implement
+1. **Commenting System**
+   - Implement backend endpoints for comments
+   - Create comment section in Article component
+   - Add comment moderation tools
+
+2. **Search Functionality**
+   - Set up MongoDB text search or ElasticSearch
+   - Implement search bar in UI
+   - Add search results page
+
+3. **Automated Testing**
+   - Set up Jest for frontend and backend
+   - Write unit tests for key components
+   - Implement CI pipeline
+
+4. **Detailed Article View Page**
+   - Add Article.js component
+   - Route to /article/:url with full content display
+   - Integrate with comment system
 
 ## Additional Notes
 - **Research Integration:** Enhanced recommendation engine with Twitter's ML approach (LightGBM, two-stage process), adding scalability and transparency tasks.

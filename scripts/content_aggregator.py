@@ -128,17 +128,297 @@ def categorize_content(text, title=""):
     return max(category_scores.items(), key=lambda x: x[1])[0] if category_scores else 'General'
 
 # Mock fetch functions (unchanged for brevity)
-def fetch_x_posts(limit=10):
-    logger.info("Fetching X posts (mock data)")
-    return []  # Placeholder
+def fetch_x_posts(limit=10, max_retries=3):
+    """Fetch Twitter/X posts with retries using external scraper."""
+    logger.info("Fetching Twitter/X posts")
+    
+    # Check for the Twitter scraper file
+    scraper_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'twitter_scraper.py')
+    if not os.path.exists(scraper_path):
+        logger.warning("Twitter scraper not found, using mock data")
+        return generate_mock_tweets(limit)
+    
+    # Get configuration
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), args.config) if SOURCES_CONFIG_AVAILABLE else None
+    
+    # Extract accounts from sources.json if available
+    accounts = "BBCWorld,CNN,Reuters,nytimes,guardian,techcrunch,TheEconomist,espn,NatGeo,WIRED"
+    if SOURCES_CONFIG_AVAILABLE and os.path.exists(config_path):
+        try:
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+                if 'twitter' in config and 'accounts' in config['twitter']:
+                    accounts = ','.join(config['twitter']['accounts'])
+                    logger.info(f"Loaded {len(config['twitter']['accounts'])} Twitter accounts from config")
+        except Exception as e:
+            logger.error(f"Failed to load Twitter accounts from config: {e}")
+    
+    # Try to fetch Twitter content with retries
+    for attempt in range(max_retries):
+        try:
+            # Use the virtual environment Python interpreter if available
+            venv_python = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'venv', 'bin', 'python')
+            cmd = [venv_python if os.path.exists(venv_python) else sys.executable, 
+                   scraper_path, 
+                   '--accounts', accounts, 
+                   '--limit', str(min(limit, 50))]
+            
+            logger.info(f"Attempt {attempt + 1}/{max_retries}: Running command: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            
+            # Extract JSON output
+            stdout = result.stdout
+            json_start = stdout.rfind('[')
+            if json_start == -1:
+                raise ValueError("No JSON data found in output")
+            
+            # Extract the full JSON array
+            json_data = stdout[json_start:]
+            
+            # Find matching closing bracket
+            bracket_count = 0
+            for i, char in enumerate(json_data):
+                if char == '[':
+                    bracket_count += 1
+                elif char == ']':
+                    bracket_count -= 1
+                    if bracket_count == 0:
+                        json_data = json_data[:i+1]
+                        break
+            
+            try:
+                content = json.loads(json_data)
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse JSON: {e}, Data: {json_data[:100]}...")
+                raise
+            
+            logger.info(f"Fetched {len(content)} posts from Twitter/X")
+            return [{
+                'title': item.get('title', f"Tweet from {item.get('author', 'Unknown')}"),
+                'summary': item.get('content_summary', ''),
+                'source': item.get('source', 'Twitter'),
+                'link': item.get('url', '#'),
+                'published': item.get('timestamp', datetime.datetime.now().isoformat()),
+                'author': item.get('author', '@unknown'),
+                'category': item.get('category', 'Social Media')
+            } for item in content]
+            
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Twitter scraper attempt {attempt + 1} failed with exit code {e.returncode}")
+            logger.error(f"STDERR: {e.stderr}")
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)  # Exponential backoff
+            else:
+                logger.warning("Max retries reached. Falling back to mock data.")
+                return generate_mock_tweets(limit)
+        except Exception as e:
+            logger.error(f"Error fetching Twitter content: {e}")
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)
+            else:
+                logger.warning("Max retries reached. Falling back to mock data.")
+                return generate_mock_tweets(limit)
+
+def generate_mock_tweets(limit=10):
+    """Generate mock Twitter/X posts."""
+    logger.info("Generating mock Twitter data")
+    categories = ['Tech', 'Business', 'Politics', 'Entertainment', 'Sports', 'Science']
+    accounts = ['@BBCWorld', '@CNN', '@Reuters', '@nytimes', '@guardian', '@techcrunch', 
+               '@TheEconomist', '@espn', '@NatGeo', '@WIRED']
+    
+    mock_tweets = []
+    for i in range(min(limit, 30)):
+        category = categories[i % len(categories)]
+        account = accounts[i % len(accounts)]
+        timestamp = datetime.datetime.now() - datetime.timedelta(hours=i)
+        
+        # Create content based on category
+        if category == 'Tech':
+            content = random.choice([
+                "New smartphone launches today with revolutionary AI features.",
+                "Tech giant announces major update to popular software.",
+                "Startup secures $50M in funding for quantum computing research.",
+                "Privacy concerns rise as app found collecting unnecessary user data.",
+                "New coding language gaining popularity among developers."
+            ])
+        elif category == 'Business':
+            content = random.choice([
+                "Stock market reaches new high amid economic recovery.",
+                "Major merger announced between industry leaders.",
+                "Retail sales increase 5% in latest quarter.",
+                "Company reports record profits despite supply chain issues.",
+                "New economic policy expected to boost small businesses."
+            ])
+        elif category == 'Politics':
+            content = random.choice([
+                "Election results showing close race in key districts.",
+                "New legislation passes with bipartisan support.",
+                "International summit addresses climate change policies.",
+                "Poll shows shifting public opinion on major policy issue.",
+                "Government announces infrastructure investment plan."
+            ])
+        else:
+            content = f"Latest news from the world of {category.lower()}. Click to read more."
+        
+        mock_tweets.append({
+            'title': f"Tweet from {account}",
+            'summary': content,
+            'source': 'Twitter (Mock)',
+            'link': f"https://twitter.com/{account[1:]}/status/{random.randint(1000000000000000000, 9999999999999999999)}",
+            'published': timestamp.isoformat(),
+            'author': account,
+            'category': category
+        })
+    
+    return mock_tweets
 
 def fetch_rss_feeds(limit=50):
     logger.info("Fetching RSS feeds")
     return []  # Placeholder
 
-def fetch_facebook_posts(limit=10):
-    logger.info("Fetching Facebook posts (mock data)")
-    return []  # Placeholder
+def fetch_facebook_posts(limit=10, max_retries=3):
+    """Fetch Facebook posts with retries using external scraper."""
+    logger.info("Fetching Facebook posts")
+    
+    # Check for the Facebook scraper file
+    scraper_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'facebook_scraper.py')
+    if not os.path.exists(scraper_path):
+        logger.warning("Facebook scraper not found, using mock data")
+        return generate_mock_facebook_posts(limit)
+    
+    # Get configuration
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), args.config) if SOURCES_CONFIG_AVAILABLE else None
+    
+    # Extract pages from sources.json if available
+    pages = "BBCNews,CNN,reuters,nytimes,TheGuardian,TechCrunch,TheEconomist,ESPN,NationalGeographic,WIRED"
+    if SOURCES_CONFIG_AVAILABLE and os.path.exists(config_path):
+        try:
+            with open(config_path, 'r') as f:
+                config = json.load(f)
+                if 'facebook' in config and 'pages' in config['facebook']:
+                    pages = ','.join(config['facebook']['pages'])
+                    logger.info(f"Loaded {len(config['facebook']['pages'])} Facebook pages from config")
+        except Exception as e:
+            logger.error(f"Failed to load Facebook pages from config: {e}")
+    
+    # Try to fetch Facebook content with retries
+    for attempt in range(max_retries):
+        try:
+            # Use the virtual environment Python interpreter if available
+            venv_python = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'venv', 'bin', 'python')
+            cmd = [venv_python if os.path.exists(venv_python) else sys.executable, 
+                   scraper_path, 
+                   '--pages', pages, 
+                   '--limit', str(min(limit, 50))]
+            
+            logger.info(f"Attempt {attempt + 1}/{max_retries}: Running command: {' '.join(cmd)}")
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            
+            # Extract JSON output
+            stdout = result.stdout
+            json_start = stdout.rfind('[')
+            if json_start == -1:
+                raise ValueError("No JSON data found in output")
+            
+            # Extract the full JSON array
+            json_data = stdout[json_start:]
+            
+            # Find matching closing bracket
+            bracket_count = 0
+            for i, char in enumerate(json_data):
+                if char == '[':
+                    bracket_count += 1
+                elif char == ']':
+                    bracket_count -= 1
+                    if bracket_count == 0:
+                        json_data = json_data[:i+1]
+                        break
+            
+            try:
+                content = json.loads(json_data)
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse JSON: {e}, Data: {json_data[:100]}...")
+                raise
+            
+            logger.info(f"Fetched {len(content)} posts from Facebook")
+            return [{
+                'title': item.get('title', f"Post from {item.get('source', 'Facebook Page')}"),
+                'summary': item.get('content_summary', ''),
+                'source': item.get('source', 'Facebook'),
+                'link': item.get('url', '#'),
+                'published': item.get('timestamp', datetime.datetime.now().isoformat()),
+                'author': item.get('author', 'Facebook Page'),
+                'category': item.get('category', 'Social Media')
+            } for item in content]
+            
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Facebook scraper attempt {attempt + 1} failed with exit code {e.returncode}")
+            logger.error(f"STDERR: {e.stderr}")
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)  # Exponential backoff
+            else:
+                logger.warning("Max retries reached. Falling back to mock data.")
+                return generate_mock_facebook_posts(limit)
+        except Exception as e:
+            logger.error(f"Error fetching Facebook content: {e}")
+            if attempt < max_retries - 1:
+                time.sleep(2 ** attempt)
+            else:
+                logger.warning("Max retries reached. Falling back to mock data.")
+                return generate_mock_facebook_posts(limit)
+
+def generate_mock_facebook_posts(limit=10):
+    """Generate mock Facebook posts."""
+    logger.info("Generating mock Facebook data")
+    categories = ['Tech', 'Business', 'Politics', 'Entertainment', 'Sports', 'Science']
+    pages = ['BBC News', 'CNN', 'Reuters', 'The New York Times', 'The Guardian', 
+            'TechCrunch', 'The Economist', 'ESPN', 'National Geographic', 'WIRED']
+    
+    mock_posts = []
+    for i in range(min(limit, 30)):
+        category = categories[i % len(categories)]
+        page = pages[i % len(pages)]
+        timestamp = datetime.datetime.now() - datetime.timedelta(hours=i*2)
+        
+        # Create content based on category
+        if category == 'Tech':
+            content = random.choice([
+                "We're excited to announce our coverage of the latest tech conference. Here are the top 5 innovations that caught our attention.",
+                "Breaking: Major security vulnerability discovered in widely used software. What you need to know to protect yourself.",
+                "Our in-depth review of the latest smartphone is now online. Is it worth the upgrade?",
+                "The future of AI is here. Read our exclusive interview with leading researchers in the field.",
+                "How tech companies are addressing climate change through innovative solutions."
+            ])
+        elif category == 'Business':
+            content = random.choice([
+                "Market analysis: What today's economic indicators mean for investors.",
+                "The rising trend of sustainable business practices and how companies are adapting.",
+                "Exclusive: CEO interview reveals company's plans for global expansion.",
+                "How remote work is reshaping office culture and business operations.",
+                "Breaking down the latest quarterly reports from industry leaders."
+            ])
+        elif category == 'Politics':
+            content = random.choice([
+                "Analysis: The impact of new legislation on everyday citizens.",
+                "Election update: The latest polling data and what it means.",
+                "International relations: New trade agreement signed between major powers.",
+                "Policy experts weigh in on controversial government decision.",
+                "Local governance: How city councils are addressing community concerns."
+            ])
+        else:
+            content = f"Check out our latest story on {category.lower()}. Link in comments!"
+        
+        mock_posts.append({
+            'title': f"Post from {page}",
+            'summary': content,
+            'source': f"Facebook: {page}",
+            'link': f"https://facebook.com/{page.lower().replace(' ', '')}/posts/{random.randint(1000000000000000, 9999999999999999)}",
+            'published': timestamp.isoformat(),
+            'author': page,
+            'category': category
+        })
+    
+    return mock_posts
 
 # Updated 4chan fetch function
 def fetch_4chan_posts(limit=30, max_retries=3) -> List[Dict[str, Any]]:

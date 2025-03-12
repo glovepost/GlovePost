@@ -64,3 +64,19 @@ pip-log.txt
 pip-delete-this-directory.txt
 *.egg-info/
 *.egg
+
+# Ignore Zone.Identifier files (Windows-specific)
+*Zone.Identifier
+
+# VS Code-specific files
+.vscode/
+.vscode-server/
+.vscode-remote/
+.code-workspace
+
+# Optional: VS Code cache and settings (if applicable)
+*.code-workspace
+.history/
+
+#ignore keys
+*.pem

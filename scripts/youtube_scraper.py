@@ -28,8 +28,8 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.StreamHandler(sys.stdout),
-        logging.FileHandler('youtube_scraper.log')
+        logging.StreamHandler(sys.stderr),  # Log to stderr instead of stdout
+        logging.FileHandler('../logs/youtube_scraper.log')
     ]
 )
 logger = logging.getLogger('YouTubeScraper')
@@ -259,7 +259,11 @@ def main():
     parser.add_argument('--config', help='Path to JSON config file with YouTube sources')
     parser.add_argument('--workers', type=int, default=4, help='Number of worker threads (default: 4)')
     parser.add_argument('--output', help='Output file path (default: stdout)')
+    parser.add_argument('--debug', action='store_true', help='Enable debug logging')
     args = parser.parse_args()
+    
+    if args.debug:
+        logger.setLevel(logging.DEBUG)
     
     channels = []
     categories = DEFAULT_CATEGORIES.copy()
@@ -283,16 +287,26 @@ def main():
     # Fetch content
     videos = fetch_youtube_content(channels, categories, names, max_workers=args.workers)
     
-    # Output results
-    result = json.dumps(videos, indent=2)
-    
-    if args.output:
-        with open(args.output, 'w') as f:
-            f.write(result)
-    else:
-        print(result)
-    
-    logger.info(f"Fetched a total of {len(videos)} videos from {len(channels)} channels")
+    try:
+        # Output results - ensure we're sending only valid JSON to stdout
+        result = json.dumps(videos, indent=2)
+        
+        # Validate the JSON is valid
+        json.loads(result)
+        
+        if args.output:
+            with open(args.output, 'w') as f:
+                f.write(result)
+        else:
+            # Use sys.stdout to print only the JSON data without any additional output
+            import sys
+            sys.stdout.write(result)
+            sys.stdout.flush()
+        
+        logger.info(f"Fetched a total of {len(videos)} videos from {len(channels)} channels")
+    except Exception as e:
+        logger.error(f"Error generating JSON output: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
