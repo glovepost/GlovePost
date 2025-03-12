@@ -1,5 +1,66 @@
+# Node dependencies
 node_modules/
+npm-debug.log*
+yarn-error.log
+pnpm-lock.yaml
+package-lock.json
+
+# Build and dist files
+dist/
+build/
+
+# Environment files
 .env
+.env.local
+.env.*.local
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Three.js specific (if using exported assets)
+*.blend1
+*.glb1
+*.gltf1
+*.fbx~
+*.obj~
+*.mtl~
+
+# Logs
+logs/
 *.log
+logs/*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Temporary files
+tmp/
+temp/
+
+# Next.js if used
+.next/
+
+# SvelteKit/Vite if used
+.svelte-kit/
+.vite/
+
+# Python virtual environment and related files
 venv/
+scripts/venv/
 __pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+*.egg-info/
+*.egg
